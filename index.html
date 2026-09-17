@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reportes de venta</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F6E5B">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#F5F7F6; --surface:#FFFFFF; --primary:#0F6E5B; --primary-dark:#0B5445;
+    --accent:#B54708; --text:#1B1F23; --muted:#6B7280; --border:#E2E5E4; --danger:#B3261E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    background:var(--bg); color:var(--text);
+    display:flex; flex-direction:column; min-height:100vh;
+  }
+  header{
+    background:var(--primary); color:#fff; padding:14px 16px;
+    display:flex; justify-content:space-between; align-items:baseline;
+  }
+  header h1{font-size:18px; margin:0; font-weight:600;}
+  header .fecha{font-size:13px; opacity:.85;}
+  main{flex:1; overflow-y:auto; padding:14px 14px 90px 14px;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:14px; margin-bottom:12px;
+  }
+  .card h2{font-size:14px; margin:0 0 10px 0; color:var(--muted); font-weight:600;}
+  .negocio-nombre{font-size:16px; font-weight:700; color:var(--text); text-align:center; margin-bottom:12px;}
+  .stat-big{font-size:28px; font-weight:700; color:var(--primary-dark);}
+  .stat-label{font-size:12px; color:var(--muted);}
+  .top-item{display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:14px;}
+  .top-item:last-child{border-bottom:none;}
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0; background:var(--surface);
+    border-top:1px solid var(--border); display:flex;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  nav.tabbar button{
+    flex:1; border:none; background:none; padding:10px 4px 8px 4px;
+    font-size:12px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:2px;
+  }
+  nav.tabbar button.active{color:var(--primary-dark); font-weight:600;}
+  nav.tabbar .icon{font-size:20px;}
+  button.primary{
+    background:var(--primary); color:#fff; border:none; border-radius:8px;
+    padding:12px 16px; font-size:15px; font-weight:600; width:100%; cursor:pointer;
+  }
+  button.secondary{
+    background:var(--surface); color:var(--primary-dark); border:1px solid var(--primary);
+    border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer;
+  }
+  button.danger{
+    background:#fff; color:var(--danger); border:1px solid var(--danger);
+    border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer;
+  }
+  button.link-danger{background:none;border:none;color:var(--danger);font-size:13px;cursor:pointer;padding:4px 8px;}
+  .row{display:flex; gap:10px;}
+  .row > *{flex:1;}
+  input[type=text], input[type=number]{
+    width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:15px;
+  }
+  label{font-size:13px; color:var(--muted); display:block; margin-bottom:4px;}
+  .field{margin-bottom:12px;}
+  .producto-line{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 0; border-bottom:1px solid var(--border); font-size:14px;
+  }
+  .producto-line .info{flex:1;}
+  .producto-line .nombre{font-weight:600;}
+  .producto-line .detalle{font-size:12px; color:var(--muted);}
+  .subtotal{font-weight:600; margin-left:8px;}
+  .empty-state{text-align:center; color:var(--muted); padding:30px 10px; font-size:14px;}
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex;
+    align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .modal{
+    background:var(--surface); width:100%; max-width:480px; border-radius:16px 16px 0 0;
+    padding:20px; max-height:85vh; overflow-y:auto;
+  }
+  .modal h3{margin:0 0 14px 0; font-size:17px;}
+  video{width:100%; border-radius:10px; background:#000;}
+  .badge{
+    display:inline-block; font-size:11px; background:var(--bg); color:var(--muted);
+    border:1px solid var(--border); border-radius:20px; padding:2px 8px; margin-left:6px;
+  }
+  .total-final{font-size:20px; font-weight:700; text-align:right; margin-top:10px;}
+  canvas{width:100%; height:160px;}
+  .rank-row{display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid var(--border);}
+  .rank-row:last-child{border-bottom:none;}
+  .toast{
+    position:fixed; bottom:76px; left:50%; transform:translateX(-50%);
+    background:var(--text); color:#fff; padding:10px 16px; border-radius:8px;
+    font-size:13px; z-index:80; opacity:0; transition:opacity .2s;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Reportes de venta</h1>
+  <span class="fecha" id="fechaHoy"></span>
+</header>
+
+<main>
+
+  <!-- PESTAÑA 1: RESUMEN -->
+  <section id="tab1" class="tab-content active">
+    <div class="negocio-nombre">TCP La Gloria de Dios</div>
+    <div class="card">
+      <h2>Total vendido hoy</h2>
+      <div class="stat-big" id="t1-total">$0.00</div>
+    </div>
+    <div class="row">
+      <div class="card">
+        <h2>Reportes cerrados</h2>
+        <div class="stat-big" id="t1-reportes">0</div>
+      </div>
+      <div class="card">
+        <h2>Productos vendidos</h2>
+        <div class="stat-big" id="t1-productos">0</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Más vendidos hoy (por cantidad)</h2>
+      <div id="t1-top3"><div class="empty-state">Aún no hay ventas cerradas hoy.</div></div>
+    </div>
+    <div class="card">
+      <h2>Fin de jornada</h2>
+      <div class="row">
+        <button class="secondary" id="btnExportar">Exportar día (Excel)</button>
+        <button class="danger" id="btnBorrarDatos">Borrar datos del día</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PESTAÑA 2: VENTA -->
+  <section id="tab2" class="tab-content">
+    <div id="sinReporte" class="card">
+      <h2>Sin reporte activo</h2>
+      <p style="font-size:14px;color:var(--muted);margin-top:0">Crea un nuevo reporte de venta para empezar a escanear productos.</p>
+      <button class="primary" id="btnNuevoReporte">+ Nuevo reporte de venta</button>
+    </div>
+
+    <div id="reporteActivo" class="card" style="display:none">
+      <h2 id="rNombre">Reporte de venta</h2>
+      <button class="primary" id="btnEscanear" style="margin-bottom:12px">Escanear producto</button>
+      <div id="listaProductos"><div class="empty-state">Aún no hay productos en este reporte.</div></div>
+      <div class="total-final" id="rTotal">Total: $0.00</div>
+      <div class="row" style="margin-top:14px">
+        <button class="danger" id="btnBorrarReporte">Eliminar reporte</button>
+        <button class="primary" id="btnFinVenta">Fin de venta</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PESTAÑA 3: ANÁLISIS -->
+  <section id="tab3" class="tab-content">
+    <div class="card">
+      <h2>Ventas por hora (hoy)</h2>
+      <canvas id="chartHoras"></canvas>
+    </div>
+    <div class="card">
+      <h2>Ranking de productos (hoy)</h2>
+      <div id="ranking"><div class="empty-state">Sin datos aún.</div></div>
+    </div>
+    <div class="row">
+      <div class="card">
+        <h2>Ticket promedio</h2>
+        <div class="stat-big" id="a-ticket">$0.00</div>
+      </div>
+      <div class="card">
+        <h2>Productos por venta (prom.)</h2>
+        <div class="stat-big" id="a-tamano">0</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Sin movimiento hoy</h2>
+      <p style="font-size:12px;color:var(--muted);margin-top:-4px">Productos vendidos otros días que hoy no se han vendido.</p>
+      <div id="sinMovimiento"><div class="empty-state">Sin datos aún.</div></div>
+    </div>
+    <div class="card">
+      <h2>Histórico diario</h2>
+      <div id="historico"><div class="empty-state">Sin datos aún.</div></div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button data-tab="1" class="active"><span class="icon">📊</span>Resumen</button>
+  <button data-tab="2"><span class="icon">🧾</span>Venta</button>
+  <button data-tab="3"><span class="icon">📈</span>Análisis</button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ======================= UTILIDADES ======================= */
+function pad(n){return n.toString().padStart(2,'0');}
+function todayStr(d=new Date()){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function money(n){return '$'+(Number(n)||0).toFixed(2);}
+function uid(){return 'p'+Date.now()+Math.random().toString(16).slice(2,8);}
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es',{weekday:'short',day:'numeric',month:'short'});
+
+/* ======================= INDEXEDDB ======================= */
+let db;
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open('comprasq-db', 1);
+    req.onupgradeneeded = (e)=>{
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains('reportes')) d.createObjectStore('reportes',{keyPath:'id',autoIncrement:true});
+      if(!d.objectStoreNames.contains('resumenDiario')) d.createObjectStore('resumenDiario',{keyPath:'fecha'});
+      if(!d.objectStoreNames.contains('config')) d.createObjectStore('config',{keyPath:'clave'});
+    };
+    req.onsuccess = (e)=>{db=e.target.result; resolve(db);};
+    req.onerror = (e)=>reject(e);
+  });
+}
+function tx(store,mode='readonly'){return db.transaction(store,mode).objectStore(store);}
+function idbGetAll(store){return new Promise((res,rej)=>{const r=tx(store).getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+function idbGet(store,key){return new Promise((res,rej)=>{const r=tx(store).get(key); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+function idbPut(store,val){return new Promise((res,rej)=>{const r=tx(store,'readwrite').put(val); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+function idbAdd(store,val){return new Promise((res,rej)=>{const r=tx(store,'readwrite').add(val); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+function idbDelete(store,key){return new Promise((res,rej)=>{const r=tx(store,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);});}
+
+/* ======================= ESTADO ======================= */
+let reporteActivo = null;
+
+async function siguienteConsecutivo(fecha){
+  const cfg = await idbGet('config','ultimoConsecutivo');
+  let n = 1;
+  if(cfg && cfg.valor.fecha === fecha) n = cfg.valor.numero + 1;
+  await idbPut('config',{clave:'ultimoConsecutivo', valor:{fecha, numero:n}});
+  return n;
+}
+
+async function cargarReporteActivo(){
+  const todos = await idbGetAll('reportes');
+  reporteActivo = todos.find(r=>r.estado==='en_curso') || null;
+  renderTab2();
+}
+
+/* ======================= PESTAÑA 2: VENTA ======================= */
+function pedirNombreCliente(){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.className='modal-overlay';
+    overlay.innerHTML = `<div class="modal">
+      <h3>Nuevo reporte de venta</h3>
+      <div class="field">
+        <label>Nombre del cliente (opcional)</label>
+        <input type="text" id="inputCliente" placeholder="Dejar en blanco si no aplica">
+      </div>
+      <div class="row">
+        <button class="secondary" id="btnCancelarCliente">Cancelar</button>
+        <button class="primary" id="btnConfirmarCliente">Crear reporte</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const input = document.getElementById('inputCliente');
+    input.focus();
+    document.getElementById('btnCancelarCliente').onclick = ()=>{overlay.remove(); resolve(null);};
+    document.getElementById('btnConfirmarCliente').onclick = ()=>{
+      const valor = input.value;
+      overlay.remove();
+      resolve(valor);
+    };
+  });
+}
+
+document.getElementById('btnNuevoReporte').onclick = async ()=>{
+  const cliente = await pedirNombreCliente();
+  if(cliente===null) return;
+  const fecha = todayStr();
+  const numero = await siguienteConsecutivo(fecha);
+  const nuevo = {
+    numeroConsecutivo:numero, fecha, cliente: cliente.trim()? cliente.trim(): null,
+    estado:'en_curso', horaInicio:Date.now(), horaCierre:null, productos:[], totalReporte:0
+  };
+  const id = await idbAdd('reportes',nuevo);
+  nuevo.id = id;
+  reporteActivo = nuevo;
+  renderTab2();
+};
+
+function renderTab2(){
+  const sin = document.getElementById('sinReporte');
+  const activo = document.getElementById('reporteActivo');
+  if(!reporteActivo){ sin.style.display='block'; activo.style.display='none'; return; }
+  sin.style.display='none'; activo.style.display='block';
+  document.getElementById('rNombre').textContent = reporteActivo.cliente
+    ? reporteActivo.cliente
+    : 'Reporte de venta N°'+reporteActivo.numeroConsecutivo;
+  const lista = document.getElementById('listaProductos');
+  if(reporteActivo.productos.length===0){
+    lista.innerHTML = '<div class="empty-state">Aún no hay productos en este reporte.</div>';
+  } else {
+    lista.innerHTML = reporteActivo.productos.map(p=>`
+      <div class="producto-line">
+        <div class="info">
+          <div class="nombre">${escapeHtml(p.nombre)}</div>
+          <div class="detalle">${escapeHtml(p.codigo)} · ${p.cantidad} ${escapeHtml(p.unidadMedida)} × ${money(p.precio)}</div>
+        </div>
+        <div class="subtotal">${money(p.subtotal)}</div>
+        <button class="link-danger" onclick="eliminarLinea('${p.idLinea}')">✕</button>
+      </div>`).join('');
+  }
+  document.getElementById('rTotal').textContent = 'Total: '+money(reporteActivo.totalReporte);
+}
+
+function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+async function guardarReporteActivo(){
+  await idbPut('reportes', reporteActivo);
+}
+
+window.eliminarLinea = async function(idLinea){
+  if(!confirm('¿Eliminar este producto del reporte?')) return;
+  reporteActivo.productos = reporteActivo.productos.filter(p=>p.idLinea!==idLinea);
+  reporteActivo.totalReporte = reporteActivo.productos.reduce((s,p)=>s+p.subtotal,0);
+  await guardarReporteActivo();
+  renderTab2();
+};
+
+document.getElementById('btnBorrarReporte').onclick = async ()=>{
+  if(!confirm('¿Eliminar todo este reporte de venta? Esta acción no se puede deshacer.')) return;
+  await idbDelete('reportes', reporteActivo.id);
+  reporteActivo = null;
+  renderTab2();
+};
+
+document.getElementById('btnFinVenta').onclick = async ()=>{
+  if(reporteActivo.productos.length===0){ toast('Agrega al menos un producto antes de cerrar.'); return; }
+  if(!confirm('¿Finalizar y guardar esta venta? No podrá modificarse después.')) return;
+  reporteActivo.estado='cerrado';
+  reporteActivo.horaCierre=Date.now();
+  await guardarReporteActivo();
+  await actualizarResumenDiario(reporteActivo.fecha);
+  reporteActivo = null;
+  renderTab2();
+  toast('Venta guardada.');
+};
+
+/* ======================= ESCANEO QR ======================= */
+document.getElementById('btnEscanear').onclick = abrirEscaner;
+
+async function abrirEscaner(){
+  if(!('BarcodeDetector' in window)){
+    // Alternativa manual si el dispositivo no soporta lectura nativa de QR
+    const texto = prompt('Tu navegador no soporta lectura de QR nativa.\nIngresa manualmente: codigo;nombre;unidad;precio');
+    if(texto) procesarCodigo(texto);
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal">
+    <h3>Escanear producto</h3>
+    <video id="videoScan" autoplay playsinline muted></video>
+    <button class="secondary" style="margin-top:12px" id="btnCancelarScan">Cancelar</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('btnCancelarScan').onclick = ()=>cerrarEscaner(stream, overlay);
+
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  }catch(err){
+    overlay.remove();
+    toast('No se pudo acceder a la cámara.');
+    return;
+  }
+  const video = document.getElementById('videoScan');
+  video.srcObject = stream;
+  const detector = new BarcodeDetector({formats:['qr_code']});
+  let activo = true;
+  async function loop(){
+    if(!activo) return;
+    try{
+      const codes = await detector.detect(video);
+      if(codes.length>0){
+        activo=false;
+        cerrarEscaner(stream, overlay);
+        procesarCodigo(codes[0].rawValue);
+        return;
+      }
+    }catch(e){}
+    requestAnimationFrame(loop);
+  }
+  loop();
+  overlay._stop = ()=>activo=false;
+}
+
+function cerrarEscaner(stream, overlay){
+  if(overlay._stop) overlay._stop();
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  overlay.remove();
+}
+
+function procesarCodigo(raw){
+  const partes = raw.split(';').map(s=>s.trim());
+  if(partes.length < 4){ toast('QR con formato inválido.'); return; }
+  const [codigo,nombre,unidadMedida,precioStr] = partes;
+  const precio = parseFloat(precioStr.replace(/,/g,''));
+  if(isNaN(precio)){ toast('Precio inválido en el QR.'); return; }
+  pedirCantidad({codigo,nombre,unidadMedida,precio});
+}
+
+function pedirCantidad(prod){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal">
+    <h3>${escapeHtml(prod.nombre)}</h3>
+    <p style="color:var(--muted);font-size:13px;margin-top:-8px">${escapeHtml(prod.codigo)} · ${money(prod.precio)} / ${escapeHtml(prod.unidadMedida)}</p>
+    <div class="field">
+      <label>Cantidad vendida</label>
+      <input type="number" id="inputCantidad" value="1" min="0.01" step="0.01" inputmode="decimal">
+    </div>
+    <div class="row">
+      <button class="secondary" id="btnCancelarCant">Cancelar</button>
+      <button class="primary" id="btnConfirmarCant">Agregar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const input = document.getElementById('inputCantidad');
+  input.focus(); input.select();
+  document.getElementById('btnCancelarCant').onclick = ()=>overlay.remove();
+  document.getElementById('btnConfirmarCant').onclick = async ()=>{
+    const cantidad = parseFloat(input.value);
+    if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.'); return; }
+    const linea = {
+      idLinea: uid(), codigo:prod.codigo, nombre:prod.nombre, unidadMedida:prod.unidadMedida,
+      precio:prod.precio, cantidad, subtotal: +(prod.precio*cantidad).toFixed(2)
+    };
+    reporteActivo.productos.push(linea);
+    reporteActivo.totalReporte = reporteActivo.productos.reduce((s,p)=>s+p.subtotal,0);
+    await guardarReporteActivo();
+    renderTab2();
+    overlay.remove();
+  };
+}
+
+/* ======================= PESTAÑA 1: RESUMEN ======================= */
+async function actualizarResumenDiario(fecha){
+  const todos = await idbGetAll('reportes');
+  const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado');
+  const totalVendido = cerradosHoy.reduce((s,r)=>s+r.totalReporte,0);
+  const conteo = {};
+  cerradosHoy.forEach(r=>r.productos.forEach(p=>{conteo[p.nombre]=(conteo[p.nombre]||0)+p.cantidad;}));
+  const topProductos = Object.entries(conteo).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([nombre,cantidad])=>({nombre,cantidad}));
+  const previo = await idbGet('resumenDiario',fecha);
+  await idbPut('resumenDiario',{
+    fecha, totalVendido, cantidadReportes:cerradosHoy.length, topProductos,
+    exportado: previo? previo.exportado : false
+  });
+}
+
+async function renderTab1(){
+  const fecha = todayStr();
+  const resumen = await idbGet('resumenDiario',fecha);
+  document.getElementById('t1-total').textContent = money(resumen? resumen.totalVendido:0);
+  document.getElementById('t1-reportes').textContent = resumen? resumen.cantidadReportes:0;
+  const todos = await idbGetAll('reportes');
+  const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado');
+  const totalProductos = cerradosHoy.reduce((s,r)=>s+r.productos.reduce((s2,p)=>s2+p.cantidad,0),0);
+  document.getElementById('t1-productos').textContent = totalProductos.toFixed(0);
+  const top3 = document.getElementById('t1-top3');
+  if(!resumen || resumen.topProductos.length===0){
+    top3.innerHTML = '<div class="empty-state">Aún no hay ventas cerradas hoy.</div>';
+  } else {
+    top3.innerHTML = resumen.topProductos.map((p,i)=>`
+      <div class="top-item"><span>${i+1}. ${escapeHtml(p.nombre)}</span><span>${p.cantidad}</span></div>`).join('');
+  }
+}
+
+/* ======================= PESTAÑA 3: ANÁLISIS ======================= */
+async function renderTab3(){
+  const fecha = todayStr();
+  const todos = await idbGetAll('reportes');
+  const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado');
+
+  // Ventas por hora
+  const horas = new Array(24).fill(0);
+  cerradosHoy.forEach(r=>{const h=new Date(r.horaCierre).getHours(); horas[h]+=r.totalReporte;});
+  dibujarBarras('chartHoras', horas.map((v,h)=>pad(h)), horas);
+
+  // Ranking completo
+  const rank = {};
+  cerradosHoy.forEach(r=>r.productos.forEach(p=>{
+    if(!rank[p.nombre]) rank[p.nombre]={cantidad:0,ingreso:0};
+    rank[p.nombre].cantidad += p.cantidad; rank[p.nombre].ingreso += p.subtotal;
+  }));
+  const rankArr = Object.entries(rank).sort((a,b)=>b[1].cantidad-a[1].cantidad);
+  const rankDiv = document.getElementById('ranking');
+  rankDiv.innerHTML = rankArr.length? rankArr.map(([nombre,d])=>`
+    <div class="rank-row"><span>${escapeHtml(nombre)}</span><span>${d.cantidad} uds · ${money(d.ingreso)}</span></div>`).join('')
+    : '<div class="empty-state">Sin datos aún.</div>';
+
+  // Ticket promedio y tamaño promedio
+  const ticket = cerradosHoy.length? cerradosHoy.reduce((s,r)=>s+r.totalReporte,0)/cerradosHoy.length : 0;
+  const tamano = cerradosHoy.length? cerradosHoy.reduce((s,r)=>s+r.productos.length,0)/cerradosHoy.length : 0;
+  document.getElementById('a-ticket').textContent = money(ticket);
+  document.getElementById('a-tamano').textContent = tamano.toFixed(1);
+
+  // Sin movimiento hoy (vendidos otros días, no hoy)
+  const nombresHoy = new Set(Object.keys(rank));
+  const nombresHistoricos = new Set();
+  todos.filter(r=>r.estado==='cerrado' && r.fecha!==fecha).forEach(r=>r.productos.forEach(p=>nombresHistoricos.add(p.nombre)));
+  const sinMovimiento = [...nombresHistoricos].filter(n=>!nombresHoy.has(n));
+  const sm = document.getElementById('sinMovimiento');
+  sm.innerHTML = sinMovimiento.length
+    ? sinMovimiento.slice(0,20).map(n=>`<div class="rank-row"><span>${escapeHtml(n)}</span></div>`).join('')
+    : '<div class="empty-state">No hay productos históricos sin vender hoy.</div>';
+
+  // Histórico diario
+  const resumenes = (await idbGetAll('resumenDiario')).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const hist = document.getElementById('historico');
+  hist.innerHTML = resumenes.length
+    ? resumenes.slice(0,14).map(r=>`
+      <div class="rank-row"><span>${r.fecha}</span><span>${money(r.totalVendido)} · ${r.cantidadReportes} reportes</span></div>`).join('')
+    : '<div class="empty-state">Sin datos aún.</div>';
+}
+
+function dibujarBarras(canvasId, labels, valores){
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth * 2;
+  const h = canvas.height = canvas.clientHeight * 2;
+  ctx.clearRect(0,0,w,h);
+  const max = Math.max(...valores, 1);
+  const barW = w/labels.length;
+  ctx.fillStyle = '#0F6E5B';
+  ctx.font = '18px sans-serif';
+  ctx.textAlign='center';
+  valores.forEach((v,i)=>{
+    const barH = (v/max) * (h-30);
+    ctx.fillRect(i*barW+4, h-barH-20, barW-8, barH);
+    if(i%3===0){ ctx.fillStyle='#6B7280'; ctx.fillText(labels[i], i*barW+barW/2, h-4); ctx.fillStyle='#0F6E5B'; }
+  });
+}
+
+/* ======================= EXPORTACIÓN (Excel XML) ======================= */
+document.getElementById('btnExportar').onclick = async ()=>{
+  const fecha = todayStr();
+  const todos = await idbGetAll('reportes');
+  const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado');
+  if(cerradosHoy.length===0){ toast('No hay ventas cerradas hoy para exportar.'); return; }
+
+  let filas = '';
+  const celda = (v,tipo='String')=>`<Cell><Data ss:Type="${tipo}">${escapeXml(String(v))}</Data></Cell>`;
+  filas += `<Row>${['Reporte','Cliente','Hora','Código','Producto','Unidad','Cantidad','Precio','Subtotal'].map(h=>celda(h)).join('')}</Row>`;
+  cerradosHoy.forEach(r=>{
+    const nombreReporte = r.cliente || ('Reporte de venta N°'+r.numeroConsecutivo);
+    const hora = new Date(r.horaCierre).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+    r.productos.forEach(p=>{
+      filas += `<Row>${[
+        celda(nombreReporte), celda(r.cliente||''), celda(hora), celda(p.codigo),
+        celda(p.nombre), celda(p.unidadMedida), celda(p.cantidad,'Number'),
+        celda(p.precio,'Number'), celda(p.subtotal,'Number')
+      ].join('')}</Row>`;
+    });
+  });
+  const totalDia = cerradosHoy.reduce((s,r)=>s+r.totalReporte,0);
+  filas += `<Row></Row><Row>${celda('TOTAL DEL DÍA')}<Cell/><Cell/><Cell/><Cell/><Cell/><Cell/><Cell/>${celda(totalDia,'Number')}</Row>`;
+
+  const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Worksheet ss:Name="Ventas ${fecha}"><Table>${filas}</Table></Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xml], {type:'application/vnd.ms-excel'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ventas_${fecha}.xls`;
+  a.click();
+
+  const resumen = await idbGet('resumenDiario',fecha);
+  if(resumen){ resumen.exportado = true; await idbPut('resumenDiario', resumen); }
+  toast('Archivo exportado.');
+};
+
+document.getElementById('btnBorrarDatos').onclick = async ()=>{
+  if(!confirm('¿Borrar todos los datos guardados en el dispositivo? Esta acción no se puede deshacer.')) return;
+  const fecha = todayStr();
+  const todos = await idbGetAll('reportes');
+  for(const r of todos.filter(r=>r.fecha===fecha)) await idbDelete('reportes', r.id);
+  reporteActivo = null;
+  await renderTab1(); renderTab2();
+  toast('Datos del día borrados.');
+};
+
+function escapeXml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ======================= NAVEGACIÓN DE PESTAÑAS ======================= */
+document.querySelectorAll('nav.tabbar button').forEach(btn=>{
+  btn.onclick = async ()=>{
+    document.querySelectorAll('nav.tabbar button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    const n = btn.dataset.tab;
+    document.getElementById('tab'+n).classList.add('active');
+    if(n==='1') await renderTab1();
+    if(n==='3') await renderTab3();
+  };
+});
+
+/* ======================= INICIO ======================= */
+(async function init(){
+  await openDB();
+  await cargarReporteActivo();
+  await renderTab1();
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
