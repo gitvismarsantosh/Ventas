@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0F6E5B">
 <link rel="icon" href="icons/icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
 <style>
   :root{
     --bg:#F5F7F6; --surface:#FFFFFF; --primary:#0F6E5B; --primary-dark:#0B5445;
@@ -360,9 +361,8 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
 document.getElementById('btnEscanear').onclick = abrirEscaner;
 
 async function abrirEscaner(){
-  if(!('BarcodeDetector' in window)){
-    // Alternativa manual si el dispositivo no soporta lectura nativa de QR
-    const texto = prompt('Tu navegador no soporta lectura de QR nativa.\nIngresa manualmente: codigo;nombre;unidad;precio');
+  if(typeof jsQR === 'undefined'){
+    const texto = prompt('No se pudo cargar el lector de QR.\nIngresa manualmente: codigo;nombre;unidad;precio');
     if(texto) procesarCodigo(texto);
     return;
   }
@@ -386,19 +386,24 @@ async function abrirEscaner(){
   }
   const video = document.getElementById('videoScan');
   video.srcObject = stream;
-  const detector = new BarcodeDetector({formats:['qr_code']});
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', {willReadFrequently:true});
   let activo = true;
-  async function loop(){
+  function loop(){
     if(!activo) return;
-    try{
-      const codes = await detector.detect(video);
-      if(codes.length>0){
+    if(video.readyState === video.HAVE_ENOUGH_DATA){
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if(code){
         activo=false;
         cerrarEscaner(stream, overlay);
-        procesarCodigo(codes[0].rawValue);
+        procesarCodigo(code.data);
         return;
       }
-    }catch(e){}
+    }
     requestAnimationFrame(loop);
   }
   loop();
