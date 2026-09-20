@@ -109,7 +109,7 @@ window.addEventListener('error', function(e){
   .rank-row:last-child{border-bottom:none;}
   .venta-cerrada{margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border-light);}
   .venta-cerrada:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
-  .venta-cerrada .top-item{background:var(--primary); color:var(--text); padding:6px 8px; border-bottom:none; font-weight:600;}
+  .venta-cerrada .top-item{background:var(--primary); color:var(--text); padding:4px 6px; border-bottom:none; font-weight:600;}
   .venta-productos{padding-left:12px; margin-top:4px;}
   .venta-producto-line{display:flex; justify-content:space-between; font-size:11px; color:var(--muted-dark); padding:2px 0;}
   .toast{
@@ -382,7 +382,10 @@ function renderTab2(){
       <div class="producto-line">
         <div class="info">
           <div class="nombre">${escapeHtml(p.nombre)}</div>
-          <div class="detalle">${escapeHtml(p.codigo)} · ${p.cantidad} ${escapeHtml(p.unidadMedida)} × ${money(p.precio)}</div>
+          <div class="detalle" style="display:flex; justify-content:space-between;">
+            <span>${p.cantidad} (${escapeHtml(p.unidadMedida)})</span>
+            <span>${money(p.precio)}</span>
+          </div>
         </div>
         <div class="subtotal">${money(p.subtotal)}</div>
         <button class="link-danger" onclick="eliminarLinea('${p.idLinea}')">✕</button>
@@ -419,7 +422,7 @@ async function renderListaVentas(){
         <span>${money(p.subtotal)}</span>
       </div>`).join('');
     const detalleMixto = r.metodoPago==='mixto'
-      ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px;">
+      ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px; font-weight:700;">
           <span>Efect.: ${money(r.pagoEfectivo)} | Transf.: ${money(r.pagoTransferencia)}</span>
         </div>`
       : '';
