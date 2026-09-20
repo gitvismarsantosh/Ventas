@@ -415,7 +415,8 @@ async function renderListaVentas(){
     const pagoTexto = etiquetasPago[r.metodoPago] || '';
     const productosHtml = r.productos.map(p=>`
       <div class="venta-producto-line">
-        <span>${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.subtotal)}</span>
+        <span>${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</span>
+        <span>${money(p.subtotal)}</span>
       </div>`).join('');
     const detalleMixto = r.metodoPago==='mixto'
       ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px; font-weight:700;">
