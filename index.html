@@ -109,7 +109,7 @@ window.addEventListener('error', function(e){
   .rank-row:last-child{border-bottom:none;}
   .venta-cerrada{margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border-light);}
   .venta-cerrada:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
-  .venta-cerrada .top-item{background:var(--primary); color:var(--text); padding:8px 10px; border-bottom:none; font-weight:600;}
+  .venta-cerrada .top-item{background:var(--primary); color:var(--text); padding:6px 8px; border-bottom:none; font-weight:600;}
   .venta-productos{padding-left:12px; margin-top:4px;}
   .venta-producto-line{display:flex; justify-content:space-between; font-size:11px; color:var(--muted-dark); padding:2px 0;}
   .toast{
@@ -411,14 +411,21 @@ async function renderListaVentas(){
   cont.innerHTML = cerradosHoy.map(r=>{
     const nombre = r.cliente ? r.cliente : 'Reporte de venta N°'+r.numeroConsecutivo;
     const hora = new Date(r.horaCierre).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+    const etiquetasPago = {transferencia:'Transferencia', efectivo:'Efectivo', mixto:'Mixto'};
+    const pagoTexto = etiquetasPago[r.metodoPago] || '';
     const productosHtml = r.productos.map(p=>`
       <div class="venta-producto-line">
         <span>${escapeHtml(p.nombre)} · ${p.cantidad} ${escapeHtml(p.unidadMedida)}</span>
         <span>${money(p.subtotal)}</span>
       </div>`).join('');
+    const detalleMixto = r.metodoPago==='mixto'
+      ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px;">
+          <span>Efect.: ${money(r.pagoEfectivo)} | Transf.: ${money(r.pagoTransferencia)}</span>
+        </div>`
+      : '';
     return `<div class="venta-cerrada">
-      <div class="top-item"><span>${escapeHtml(nombre)} · ${hora}</span><span>${money(r.totalReporte)}</span></div>
-      <div class="venta-productos">${productosHtml}</div>
+      <div class="top-item"><span>${escapeHtml(nombre)} · ${hora}${pagoTexto? ' | '+pagoTexto : ''}</span><span>${money(r.totalReporte)}</span></div>
+      <div class="venta-productos">${productosHtml}${detalleMixto}</div>
     </div>`;
   }).join('');
 }
