@@ -7,7 +7,12 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0F6E5B">
 <link rel="icon" href="icons/icon-192.png">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js" onerror="window.jsQRfalloRed=true"></script>
+<script>
+window.addEventListener('error', function(e){
+  alert('Error detectado: '+e.message+' (en '+(e.filename||'?')+' línea '+e.lineno+')');
+});
+</script>
 <style>
   :root{
     --bg:#F5F7F6; --surface:#FFFFFF; --primary:#0F6E5B; --primary-dark:#0B5445;
@@ -362,7 +367,8 @@ document.getElementById('btnEscanear').onclick = abrirEscaner;
 
 async function abrirEscaner(){
   if(typeof jsQR === 'undefined'){
-    const texto = prompt('No se pudo cargar el lector de QR.\nIngresa manualmente: codigo;nombre;unidad;precio');
+    const razon = window.jsQRfalloRed ? '(fallo de red al descargar la librería)' : '(la librería descargó pero no se ejecutó correctamente)';
+    const texto = prompt('No se pudo cargar el lector de QR '+razon+'.\nIngresa manualmente: codigo;nombre;unidad;precio');
     if(texto) procesarCodigo(texto);
     return;
   }
