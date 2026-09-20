@@ -1,15 +1,19 @@
-const CACHE_NAME = 'compras-q-v1';
+const CACHE_NAME = 'compras-q-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js'
+  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(ASSETS.map((url) => cache.add(url).catch((err) => {
+        console.warn('No se pudo cachear:', url, err);
+      })))
+    )
   );
   self.skipWaiting();
 });
