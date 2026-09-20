@@ -167,6 +167,11 @@ window.addEventListener('error', function(e){
         <button class="primary" id="btnFinVenta">Fin de venta</button>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Ventas del día</h2>
+      <div id="listaVentasCompletadas"><div class="empty-state">Aún no hay ventas cerradas hoy.</div></div>
+    </div>
   </section>
 
   <!-- PESTAÑA 3: ANÁLISIS -->
@@ -329,6 +334,22 @@ function renderTab2(){
   document.getElementById('rTotal').textContent = 'Total: '+money(reporteActivo.totalReporte);
 }
 
+async function renderListaVentas(){
+  const fecha = todayStr();
+  const todos = await idbGetAll('reportes');
+  const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado').sort((a,b)=>b.horaCierre-a.horaCierre);
+  const cont = document.getElementById('listaVentasCompletadas');
+  if(cerradosHoy.length===0){
+    cont.innerHTML = '<div class="empty-state">Aún no hay ventas cerradas hoy.</div>';
+    return;
+  }
+  cont.innerHTML = cerradosHoy.map(r=>{
+    const nombre = r.cliente ? r.cliente : 'Reporte de venta N°'+r.numeroConsecutivo;
+    const hora = new Date(r.horaCierre).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="top-item"><span>${escapeHtml(nombre)} · ${hora}</span><span>${money(r.totalReporte)}</span></div>`;
+  }).join('');
+}
+
 function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 async function guardarReporteActivo(){
@@ -359,6 +380,7 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
   await actualizarResumenDiario(reporteActivo.fecha);
   reporteActivo = null;
   renderTab2();
+  await renderListaVentas();
   toast('Venta guardada.');
 };
 
@@ -627,6 +649,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn=>{
     const n = btn.dataset.tab;
     document.getElementById('tab'+n).classList.add('active');
     if(n==='1') await renderTab1();
+    if(n==='2') await renderListaVentas();
     if(n==='3') await renderTab3();
   };
 });
@@ -636,6 +659,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn=>{
   await openDB();
   await cargarReporteActivo();
   await renderTab1();
+  await renderListaVentas();
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('service-worker.js').catch(()=>{});
   }
