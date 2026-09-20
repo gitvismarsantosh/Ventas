@@ -382,10 +382,7 @@ function renderTab2(){
       <div class="producto-line">
         <div class="info">
           <div class="nombre">${escapeHtml(p.nombre)}</div>
-          <div class="detalle" style="display:flex; justify-content:space-between;">
-            <span>${p.cantidad} (${escapeHtml(p.unidadMedida)})</span>
-            <span>${money(p.precio)}</span>
-          </div>
+          <div class="detalle">${p.cantidad} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</div>
         </div>
         <div class="subtotal">${money(p.subtotal)}</div>
         <button class="link-danger" onclick="eliminarLinea('${p.idLinea}')">✕</button>
@@ -418,8 +415,7 @@ async function renderListaVentas(){
     const pagoTexto = etiquetasPago[r.metodoPago] || '';
     const productosHtml = r.productos.map(p=>`
       <div class="venta-producto-line">
-        <span>${escapeHtml(p.nombre)} · ${p.cantidad} ${escapeHtml(p.unidadMedida)}</span>
-        <span>${money(p.subtotal)}</span>
+        <span>${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.subtotal)}</span>
       </div>`).join('');
     const detalleMixto = r.metodoPago==='mixto'
       ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px; font-weight:700;">
