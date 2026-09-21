@@ -961,7 +961,13 @@ document.querySelectorAll('nav.tabbar button').forEach(btn=>{
   await renderTab1();
   await renderListaVentas();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+    navigator.serviceWorker.register('service-worker.js').then(reg=>{
+      console.log('Service worker registrado, scope:', reg.scope);
+    }).catch(err=>{
+      alert('Error registrando el service worker: '+err.message);
+    });
+  } else {
+    alert('Este navegador no soporta service workers (no podrá funcionar offline).');
   }
 })();
 </script>
