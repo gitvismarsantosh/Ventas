@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Reportes de venta</title>
+<title>Ventas QR v. 1.0.0</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#083E73">
 <link rel="icon" href="icons/icon-192.png">
@@ -98,6 +98,9 @@ window.addEventListener('error', function(e){
     padding:20px; max-height:85vh; overflow-y:auto; border:1px solid var(--border);
   }
   .modal h3{margin:0 0 14px 0; font-size:15px; color:var(--text);}
+  .modal-light{background:var(--surface); color:var(--text-dark); border:1px solid var(--border-light);}
+  .modal-light h3{color:var(--text-dark);}
+  .modal-light label{color:var(--muted-dark);}
   video{width:100%; border-radius:0; background:#000;}
   .badge{
     display:inline-block; font-size:11px; background:var(--primary-dark); color:var(--muted);
@@ -123,7 +126,7 @@ window.addEventListener('error', function(e){
 <body>
 
 <header>
-  <h1>Reportes de venta</h1>
+  <h1>Ventas QR v. 1.0.0</h1>
   <span class="fecha" id="fechaHoy"></span>
 </header>
 
@@ -173,7 +176,10 @@ window.addEventListener('error', function(e){
 
     <div id="reporteActivo" class="card" style="display:none">
       <h2 id="rNombre">Reporte de venta</h2>
-      <button class="primary" id="btnEscanear" style="margin-bottom:12px">Escanear producto</button>
+      <div class="row" style="margin-bottom:12px">
+        <button class="primary" id="btnEscanear" style="padding:6px 14px">Escanear producto</button>
+        <button class="secondary" id="btnAgregarManual" style="padding:6px 14px">Agregar manualmente</button>
+      </div>
       <div id="listaProductos"><div class="empty-state">Aún no hay productos en este reporte.</div></div>
       <div class="total-final" id="rTotal">Total: $0.00</div>
       <div id="camposMixto" style="display:none; margin-top:10px;">
@@ -204,6 +210,7 @@ window.addEventListener('error', function(e){
     </div>
     <div class="card">
       <h2>Tendencia de ventas (últimos 7 días)</h2>
+      <p style="font-size:12px;color:var(--muted-dark);margin-top:-4px">Muestra el total vendido cada día de la última semana, para ver si las ventas suben, bajan o se mantienen.</p>
       <canvas id="chartTendencia"></canvas>
     </div>
     <div class="card">
@@ -230,6 +237,10 @@ window.addEventListener('error', function(e){
     <div class="card">
       <h2>Histórico diario</h2>
       <div id="historico"><div class="empty-state">Sin datos aún.</div></div>
+    </div>
+    <div class="card">
+      <h2>Ventas por día</h2>
+      <div id="ventasPorDia"><div class="empty-state">Sin datos aún.</div></div>
     </div>
   </section>
 
@@ -403,6 +414,27 @@ function renderTab2(){
   }
 }
 
+function renderizarVentaHTML(r){
+  const nombre = r.cliente ? r.cliente : 'Reporte de venta N°'+r.numeroConsecutivo;
+  const hora = new Date(r.horaCierre).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+  const etiquetasPago = {transferencia:'Transferencia', efectivo:'Efectivo', mixto:'Mixto'};
+  const pagoTexto = etiquetasPago[r.metodoPago] || '';
+  const productosHtml = r.productos.map(p=>`
+    <div class="venta-producto-line">
+      <span>${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</span>
+      <span>${money(p.subtotal)}</span>
+    </div>`).join('');
+  const detalleMixto = r.metodoPago==='mixto'
+    ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px; font-weight:700;">
+        <span>Efect.: ${money(r.pagoEfectivo)} | Transf.: ${money(r.pagoTransferencia)}</span>
+      </div>`
+    : '';
+  return `<div class="venta-cerrada">
+    <div class="top-item"><span>${escapeHtml(nombre)} · ${hora}${pagoTexto? ' | '+pagoTexto : ''}</span><span>${money(r.totalReporte)}</span></div>
+    <div class="venta-productos">${productosHtml}${detalleMixto}</div>
+  </div>`;
+}
+
 async function renderListaVentas(){
   const fecha = todayStr();
   const todos = await idbGetAll('reportes');
@@ -412,26 +444,7 @@ async function renderListaVentas(){
     cont.innerHTML = '<div class="empty-state">Aún no hay ventas cerradas hoy.</div>';
     return;
   }
-  cont.innerHTML = cerradosHoy.map(r=>{
-    const nombre = r.cliente ? r.cliente : 'Reporte de venta N°'+r.numeroConsecutivo;
-    const hora = new Date(r.horaCierre).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
-    const etiquetasPago = {transferencia:'Transferencia', efectivo:'Efectivo', mixto:'Mixto'};
-    const pagoTexto = etiquetasPago[r.metodoPago] || '';
-    const productosHtml = r.productos.map(p=>`
-      <div class="venta-producto-line">
-        <span>${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</span>
-        <span>${money(p.subtotal)}</span>
-      </div>`).join('');
-    const detalleMixto = r.metodoPago==='mixto'
-      ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px; font-weight:700;">
-          <span>Efect.: ${money(r.pagoEfectivo)} | Transf.: ${money(r.pagoTransferencia)}</span>
-        </div>`
-      : '';
-    return `<div class="venta-cerrada">
-      <div class="top-item"><span>${escapeHtml(nombre)} · ${hora}${pagoTexto? ' | '+pagoTexto : ''}</span><span>${money(r.totalReporte)}</span></div>
-      <div class="venta-productos">${productosHtml}${detalleMixto}</div>
-    </div>`;
-  }).join('');
+  cont.innerHTML = cerradosHoy.map(renderizarVentaHTML).join('');
 }
 
 function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -480,6 +493,44 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
 
 /* ======================= ESCANEO QR ======================= */
 document.getElementById('btnEscanear').onclick = abrirEscaner;
+
+document.getElementById('btnAgregarManual').onclick = ()=>{
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal modal-light">
+    <h3>Agregar producto manualmente</h3>
+    <div class="field"><label>Código</label><input type="text" id="mCodigo"></div>
+    <div class="field"><label>Nombre</label><input type="text" id="mNombre"></div>
+    <div class="field"><label>Unidad de medida</label><input type="text" id="mUnidad"></div>
+    <div class="field"><label>Precio</label><input type="number" id="mPrecio" step="0.01" min="0"></div>
+    <div class="field"><label>Cantidad</label><input type="number" id="mCantidad" value="1" min="0.01" step="0.01"></div>
+    <div class="row">
+      <button class="secondary" id="btnCancelarManual">Cancelar</button>
+      <button class="primary" id="btnConfirmarManual">Agregar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('btnCancelarManual').onclick = ()=>overlay.remove();
+  document.getElementById('btnConfirmarManual').onclick = async ()=>{
+    const codigo = document.getElementById('mCodigo').value.trim();
+    const nombre = document.getElementById('mNombre').value.trim();
+    const unidadMedida = document.getElementById('mUnidad').value.trim();
+    const precio = parseFloat(document.getElementById('mPrecio').value);
+    const cantidad = parseFloat(document.getElementById('mCantidad').value);
+    if(!codigo || !nombre || !unidadMedida){ toast('Código, nombre y unidad son obligatorios.'); return; }
+    if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
+    if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.'); return; }
+    const linea = {
+      idLinea: uid(), codigo, nombre, unidadMedida, precio, cantidad,
+      subtotal: +(precio*cantidad).toFixed(2)
+    };
+    reporteActivo.productos.push(linea);
+    reporteActivo.totalReporte = reporteActivo.productos.reduce((s,p)=>s+p.subtotal,0);
+    await guardarReporteActivo();
+    renderTab2();
+    overlay.remove();
+  };
+};
 
 async function abrirEscaner(){
   if(typeof jsQR === 'undefined'){
@@ -634,7 +685,7 @@ async function renderTab3(){
   // Ventas por hora
   const horas = new Array(24).fill(0);
   cerradosHoy.forEach(r=>{const h=new Date(r.horaCierre).getHours(); horas[h]+=r.totalReporte;});
-  dibujarBarras('chartHoras', horas.map((v,h)=>pad(h)), horas);
+  dibujarBarras('chartHoras', horas.map((v,h)=>pad(h)), horas, 1);
 
   // Ranking completo
   const rank = {};
@@ -691,9 +742,21 @@ async function renderTab3(){
     ? resumenes.slice(0,14).map(r=>`
       <div class="rank-row"><span>${r.fecha}</span><span>${money(r.totalVendido)} · ${r.cantidadReportes} reportes</span></div>`).join('')
     : '<div class="empty-state">Sin datos aún.</div>';
+
+  // Ventas por día (listado completo de ventas, agrupado por fecha)
+  const porFecha = {};
+  cerradosTodos.forEach(r=>{ (porFecha[r.fecha] = porFecha[r.fecha] || []).push(r); });
+  const fechasOrdenadas = Object.keys(porFecha).sort((a,b)=>b.localeCompare(a));
+  const ventasPorDiaDiv = document.getElementById('ventasPorDia');
+  ventasPorDiaDiv.innerHTML = fechasOrdenadas.length
+    ? fechasOrdenadas.map(f=>{
+        const ventasDelDia = porFecha[f].sort((a,b)=>b.horaCierre-a.horaCierre);
+        return `<h2 style="margin-top:14px">${f}</h2>` + ventasDelDia.map(renderizarVentaHTML).join('');
+      }).join('')
+    : '<div class="empty-state">Sin datos aún.</div>';
 }
 
-function dibujarBarras(canvasId, labels, valores){
+function dibujarBarras(canvasId, labels, valores, pasoEtiqueta=3){
   const canvas = document.getElementById(canvasId);
   const ctx = canvas.getContext('2d');
   const w = canvas.width = canvas.clientWidth * 2;
@@ -702,12 +765,12 @@ function dibujarBarras(canvasId, labels, valores){
   const max = Math.max(...valores, 1);
   const barW = w/labels.length;
   ctx.fillStyle = '#0F6E5B';
-  ctx.font = '18px sans-serif';
+  ctx.font = '14px sans-serif';
   ctx.textAlign='center';
   valores.forEach((v,i)=>{
     const barH = (v/max) * (h-30);
     ctx.fillRect(i*barW+4, h-barH-20, barW-8, barH);
-    if(i%3===0){ ctx.fillStyle='#6B7280'; ctx.fillText(labels[i], i*barW+barW/2, h-4); ctx.fillStyle='#0F6E5B'; }
+    if(i%pasoEtiqueta===0){ ctx.fillStyle='#6B7280'; ctx.fillText(labels[i], i*barW+barW/2, h-4); ctx.fillStyle='#0F6E5B'; }
   });
 }
 
@@ -744,7 +807,7 @@ async function codigoTieneOperaciones(codigo){
 }
 
 async function renderCatalogo(){
-  const productos = (await idbGetAll('productos')).sort((a,b)=>b.codigo.localeCompare(a.codigo));
+  const productos = (await idbGetAll('productos')).sort((a,b)=>a.codigo.localeCompare(b.codigo));
   const unidades = await idbGetAll('unidades');
   const unidadPorCodigo = {};
   unidades.forEach(u=>unidadPorCodigo[u.codigo]=u);
@@ -858,7 +921,7 @@ document.getElementById('btnAgregarProducto').onclick = async ()=>{
 };
 
 async function renderUnidades(){
-  const unidades = (await idbGetAll('unidades')).sort((a,b)=>b.codigo.localeCompare(a.codigo));
+  const unidades = (await idbGetAll('unidades')).sort((a,b)=>a.codigo.localeCompare(b.codigo));
   const cont = document.getElementById('listaUnidades');
   if(unidades.length===0){
     cont.innerHTML = '<div class="empty-state">Aún no hay unidades registradas.</div>';

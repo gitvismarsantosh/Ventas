@@ -1,6 +1,6 @@
 {
-  "name": "Reportes de venta",
-  "short_name": "Reportes de venta",
+  "name": "Ventas QR v. 1.0.0",
+  "short_name": "Ventas QR v. 1.0.0",
   "description": "Punto de venta con escaneo QR, reportes de venta y exportación diaria a Excel",
   "start_url": "./index.html",
   "scope": "./",
