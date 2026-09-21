@@ -141,9 +141,13 @@ window.addEventListener('error', function(e){
         <h2>Reportes cerrados</h2>
         <div class="stat-big" id="t1-reportes">0</div>
       </div>
-      <div class="card">
-        <h2>Productos vendidos</h2>
-        <div class="stat-big" id="t1-productos">0</div>
+    </div>
+    <div class="card">
+      <h2>Pagos por tipo</h2>
+      <div id="t1-pagos">
+        <div class="top-item"><span>Transferencia:&nbsp;&nbsp;[0]</span><span>$0.00</span></div>
+        <div class="top-item"><span>Efectivo:&nbsp;&nbsp;[0]</span><span>$0.00</span></div>
+        <div class="top-item"><span>Mixto:&nbsp;&nbsp;[0]</span><span>$0.00</span></div>
       </div>
     </div>
     <div class="card">
@@ -599,8 +603,19 @@ async function renderTab1(){
   document.getElementById('t1-reportes').textContent = resumen? resumen.cantidadReportes:0;
   const todos = await idbGetAll('reportes');
   const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado');
-  const totalProductos = cerradosHoy.reduce((s,r)=>s+r.productos.reduce((s2,p)=>s2+p.cantidad,0),0);
-  document.getElementById('t1-productos').textContent = totalProductos.toFixed(0);
+
+  // Pagos por tipo
+  const porTransferencia = cerradosHoy.filter(r=>r.metodoPago==='transferencia');
+  const porEfectivo = cerradosHoy.filter(r=>r.metodoPago==='efectivo');
+  const porMixto = cerradosHoy.filter(r=>r.metodoPago==='mixto');
+  const totalTransferencia = porTransferencia.reduce((s,r)=>s+r.totalReporte,0) + porMixto.reduce((s,r)=>s+(r.pagoTransferencia||0),0);
+  const totalEfectivo = porEfectivo.reduce((s,r)=>s+r.totalReporte,0) + porMixto.reduce((s,r)=>s+(r.pagoEfectivo||0),0);
+  const totalMixto = porMixto.reduce((s,r)=>s+r.totalReporte,0);
+  document.getElementById('t1-pagos').innerHTML = `
+    <div class="top-item"><span>Transferencia:&nbsp;&nbsp;[${porTransferencia.length}]</span><span>${money(totalTransferencia)}</span></div>
+    <div class="top-item"><span>Efectivo:&nbsp;&nbsp;[${porEfectivo.length}]</span><span>${money(totalEfectivo)}</span></div>
+    <div class="top-item"><span>Mixto:&nbsp;&nbsp;[${porMixto.length}]</span><span>${money(totalMixto)}</span></div>`;
+
   const top3 = document.getElementById('t1-top3');
   if(!resumen || resumen.topProductos.length===0){
     top3.innerHTML = '<div class="empty-state">Aún no hay ventas cerradas hoy.</div>';
