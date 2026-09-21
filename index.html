@@ -744,7 +744,7 @@ async function codigoTieneOperaciones(codigo){
 }
 
 async function renderCatalogo(){
-  const productos = (await idbGetAll('productos')).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const productos = (await idbGetAll('productos')).sort((a,b)=>b.codigo.localeCompare(a.codigo));
   const unidades = await idbGetAll('unidades');
   const unidadPorCodigo = {};
   unidades.forEach(u=>unidadPorCodigo[u.codigo]=u);
@@ -858,7 +858,7 @@ document.getElementById('btnAgregarProducto').onclick = async ()=>{
 };
 
 async function renderUnidades(){
-  const unidades = (await idbGetAll('unidades')).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const unidades = (await idbGetAll('unidades')).sort((a,b)=>b.codigo.localeCompare(a.codigo));
   const cont = document.getElementById('listaUnidades');
   if(unidades.length===0){
     cont.innerHTML = '<div class="empty-state">Aún no hay unidades registradas.</div>';
