@@ -240,6 +240,11 @@ window.addEventListener('error', function(e){
     </div>
     <div class="card">
       <h2>Ventas por día</h2>
+      <div class="row" style="align-items:center; margin-bottom:8px;">
+        <button class="secondary" id="btnVentaAnterior">◀ Anterior</button>
+        <div style="text-align:center; font-size:12px; color:var(--muted-dark); align-self:center;" id="ventaPorDiaContador">0 / 0</div>
+        <button class="secondary" id="btnVentaSiguiente">Siguiente ▶</button>
+      </div>
       <div id="ventasPorDia"><div class="empty-state">Sin datos aún.</div></div>
     </div>
   </section>
@@ -255,6 +260,11 @@ window.addEventListener('error', function(e){
       <h2>Catálogo de unidades de medida</h2>
       <button class="primary" id="btnAgregarUnidad" style="margin-bottom:12px">+ Agregar unidad</button>
       <div id="listaUnidades"><div class="empty-state">Aún no hay unidades registradas.</div></div>
+    </div>
+    <div class="card">
+      <h2>Diagnóstico offline</h2>
+      <button class="secondary" id="btnDiagnostico" style="margin-bottom:12px">Verificar estado offline</button>
+      <pre id="resultadoDiagnostico" style="white-space:pre-wrap; font-size:11px; color:var(--muted-dark); margin:0;">Toca el botón para revisar.</pre>
     </div>
   </section>
 
@@ -337,10 +347,10 @@ function pedirNombreCliente(){
         <label>Método de pago</label>
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
           <label style="display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text);">
-            <input type="radio" name="metodoPago" value="transferencia" checked> Transferencia
+            <input type="radio" name="metodoPago" value="transferencia"> Transferencia
           </label>
           <label style="display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text);">
-            <input type="radio" name="metodoPago" value="efectivo"> Efectivo
+            <input type="radio" name="metodoPago" value="efectivo" checked> Efectivo
           </label>
           <label style="display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text);">
             <input type="radio" name="metodoPago" value="mixto"> Mixto
@@ -494,14 +504,20 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
 /* ======================= ESCANEO QR ======================= */
 document.getElementById('btnEscanear').onclick = abrirEscaner;
 
-document.getElementById('btnAgregarManual').onclick = ()=>{
+document.getElementById('btnAgregarManual').onclick = async ()=>{
+  const unidades = await idbGetAll('unidades');
+  const opcionesUnidad = unidades.map(u=>
+    `<option value="${escapeHtml(u.nombre)}">${escapeHtml(u.nombre)} (${escapeHtml(u.abreviatura)})</option>`
+  ).join('');
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal modal-light">
     <h3>Agregar producto manualmente</h3>
     <div class="field"><label>Código</label><input type="text" id="mCodigo"></div>
     <div class="field"><label>Nombre</label><input type="text" id="mNombre"></div>
-    <div class="field"><label>Unidad de medida</label><input type="text" id="mUnidad"></div>
+    <div class="field"><label>Unidad de medida</label>
+      <select id="mUnidad"><option value="">Selecciona una unidad</option>${opcionesUnidad}</select>
+    </div>
     <div class="field"><label>Precio</label><input type="number" id="mPrecio" step="0.01" min="0"></div>
     <div class="field"><label>Cantidad</label><input type="number" id="mCantidad" value="1" min="0.01" step="0.01"></div>
     <div class="row">
@@ -514,7 +530,7 @@ document.getElementById('btnAgregarManual').onclick = ()=>{
   document.getElementById('btnConfirmarManual').onclick = async ()=>{
     const codigo = document.getElementById('mCodigo').value.trim();
     const nombre = document.getElementById('mNombre').value.trim();
-    const unidadMedida = document.getElementById('mUnidad').value.trim();
+    const unidadMedida = document.getElementById('mUnidad').value;
     const precio = parseFloat(document.getElementById('mPrecio').value);
     const cantidad = parseFloat(document.getElementById('mCantidad').value);
     if(!codigo || !nombre || !unidadMedida){ toast('Código, nombre y unidad son obligatorios.'); return; }
@@ -705,7 +721,7 @@ async function renderTab3(){
   const dias7 = [];
   for(let i=6;i>=0;i--) dias7.push(fechaOffset(i));
   const totalesPorDia = dias7.map(f=>cerradosTodos.filter(r=>r.fecha===f).reduce((s,r)=>s+r.totalReporte,0));
-  dibujarBarras('chartTendencia', dias7.map(f=>f.slice(5)), totalesPorDia);
+  dibujarBarras('chartTendencia', dias7.map(f=>f.slice(5)), totalesPorDia, 1);
 
   // Semana actual vs semana anterior
   const diasSemanaActual = []; for(let i=0;i<7;i++) diasSemanaActual.push(fechaOffset(i));
@@ -743,18 +759,39 @@ async function renderTab3(){
       <div class="rank-row"><span>${r.fecha}</span><span>${money(r.totalVendido)} · ${r.cantidadReportes} reportes</span></div>`).join('')
     : '<div class="empty-state">Sin datos aún.</div>';
 
-  // Ventas por día (listado completo de ventas, agrupado por fecha)
-  const porFecha = {};
-  cerradosTodos.forEach(r=>{ (porFecha[r.fecha] = porFecha[r.fecha] || []).push(r); });
-  const fechasOrdenadas = Object.keys(porFecha).sort((a,b)=>b.localeCompare(a));
-  const ventasPorDiaDiv = document.getElementById('ventasPorDia');
-  ventasPorDiaDiv.innerHTML = fechasOrdenadas.length
-    ? fechasOrdenadas.map(f=>{
-        const ventasDelDia = porFecha[f].sort((a,b)=>b.horaCierre-a.horaCierre);
-        return `<h2 style="margin-top:14px">${f}</h2>` + ventasDelDia.map(renderizarVentaHTML).join('');
-      }).join('')
-    : '<div class="empty-state">Sin datos aún.</div>';
+  // Ventas por día (navegación de una venta a la vez)
+  historicoVentas = cerradosTodos.slice().sort((a,b)=>b.horaCierre-a.horaCierre);
+  historicoIndice = 0;
+  renderVentaPorDiaActual();
 }
+
+let historicoVentas = [];
+let historicoIndice = 0;
+
+function renderVentaPorDiaActual(){
+  const cont = document.getElementById('ventasPorDia');
+  const contador = document.getElementById('ventaPorDiaContador');
+  if(historicoVentas.length===0){
+    cont.innerHTML = '<div class="empty-state">Sin datos aún.</div>';
+    contador.textContent = '0 / 0';
+    return;
+  }
+  const r = historicoVentas[historicoIndice];
+  cont.innerHTML = `<div style="text-align:center;font-size:12px;color:var(--muted-dark);margin-bottom:6px;">${r.fecha}</div>` + renderizarVentaHTML(r);
+  contador.textContent = (historicoIndice+1) + ' / ' + historicoVentas.length;
+}
+
+document.getElementById('btnVentaAnterior').onclick = ()=>{
+  if(historicoVentas.length===0) return;
+  historicoIndice = (historicoIndice - 1 + historicoVentas.length) % historicoVentas.length;
+  renderVentaPorDiaActual();
+};
+
+document.getElementById('btnVentaSiguiente').onclick = ()=>{
+  if(historicoVentas.length===0) return;
+  historicoIndice = (historicoIndice + 1) % historicoVentas.length;
+  renderVentaPorDiaActual();
+};
 
 function dibujarBarras(canvasId, labels, valores, pasoEtiqueta=3){
   const canvas = document.getElementById(canvasId);
@@ -841,7 +878,7 @@ window.editarProductoCatalogo = async function(codigo){
   ).join('');
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
-  overlay.innerHTML = `<div class="modal">
+  overlay.innerHTML = `<div class="modal modal-light">
     <h3>Editar producto</h3>
     <div class="field"><label>Código</label><input type="text" id="inCodigo" value="${escapeHtml(prod.codigo)}" disabled></div>
     <div class="field"><label>Nombre</label><input type="text" id="inNombre" value="${escapeHtml(prod.nombre)}"></div>
@@ -888,7 +925,7 @@ document.getElementById('btnAgregarProducto').onclick = async ()=>{
   ).join('');
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
-  overlay.innerHTML = `<div class="modal">
+  overlay.innerHTML = `<div class="modal modal-light">
     <h3>Nuevo producto</h3>
     <div class="field"><label>Código</label><input type="text" id="inCodigo"></div>
     <div class="field"><label>Nombre</label><input type="text" id="inNombre"></div>
@@ -939,7 +976,7 @@ async function renderUnidades(){
 document.getElementById('btnAgregarUnidad').onclick = ()=>{
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
-  overlay.innerHTML = `<div class="modal">
+  overlay.innerHTML = `<div class="modal modal-light">
     <h3>Nueva unidad de medida</h3>
     <div class="field"><label>Código</label><input type="text" id="inCodU"></div>
     <div class="field"><label>Nombre</label><input type="text" id="inNombreU"></div>
@@ -1015,6 +1052,35 @@ document.getElementById('btnBorrarDatos').onclick = async ()=>{
 };
 
 function escapeXml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ======================= DIAGNÓSTICO OFFLINE ======================= */
+document.getElementById('btnDiagnostico').onclick = async ()=>{
+  const out = document.getElementById('resultadoDiagnostico');
+  const lineas = [];
+  lineas.push('Service Worker soportado: ' + ('serviceWorker' in navigator ? 'Sí' : 'No'));
+  if('serviceWorker' in navigator){
+    const regs = await navigator.serviceWorker.getRegistrations();
+    lineas.push('Registros encontrados: ' + regs.length);
+    regs.forEach(r=>{
+      const estado = r.active ? 'activo' : (r.installing ? 'instalando' : (r.waiting ? 'esperando' : 'sin worker'));
+      lineas.push('  scope: ' + r.scope + ' | estado: ' + estado);
+    });
+    lineas.push('Controlando esta página ahora mismo: ' + (navigator.serviceWorker.controller ? 'Sí (' + navigator.serviceWorker.controller.scriptURL + ')' : 'No'));
+  }
+  if('caches' in window){
+    const nombres = await caches.keys();
+    lineas.push('Cachés encontrados: ' + (nombres.length ? nombres.join(', ') : '(ninguno)'));
+    for(const nombre of nombres){
+      const cache = await caches.open(nombre);
+      const keys = await cache.keys();
+      lineas.push(nombre + ' -> ' + keys.length + ' archivo(s):');
+      keys.forEach(k=> lineas.push('   - ' + k.url));
+    }
+  } else {
+    lineas.push('Cache Storage no soportado en este navegador.');
+  }
+  out.textContent = lineas.join('\n');
+};
 
 /* ======================= NAVEGACIÓN DE PESTAÑAS ======================= */
 document.querySelectorAll('nav.tabbar button').forEach(btn=>{
