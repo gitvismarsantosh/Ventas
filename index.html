@@ -101,6 +101,12 @@ window.addEventListener('error', function(e){
   .modal-light{background:var(--surface); color:var(--text-dark); border:1px solid var(--border-light);}
   .modal-light h3{color:var(--text-dark);}
   .modal-light label{color:var(--muted-dark);}
+  .sugerencias-lista{
+    position:absolute; left:0; right:0; z-index:20; background:var(--surface);
+    border:1px solid var(--border-light); border-top:none; max-height:160px; overflow-y:auto; display:none;
+  }
+  .sugerencia-item{padding:8px 10px; font-size:14px; color:var(--text-dark); border-bottom:1px solid var(--border-light); cursor:pointer;}
+  .sugerencia-item:last-child{border-bottom:none;}
   video{width:100%; border-radius:0; background:#000;}
   .badge{
     display:inline-block; font-size:11px; background:var(--primary-dark); color:var(--muted);
@@ -505,19 +511,22 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
 document.getElementById('btnEscanear').onclick = abrirEscaner;
 
 document.getElementById('btnAgregarManual').onclick = async ()=>{
+  const productos = await idbGetAll('productos');
   const unidades = await idbGetAll('unidades');
-  const opcionesUnidad = unidades.map(u=>
-    `<option value="${escapeHtml(u.nombre)}">${escapeHtml(u.nombre)} (${escapeHtml(u.abreviatura)})</option>`
-  ).join('');
+  const unidadPorCodigo = {}; unidades.forEach(u=>unidadPorCodigo[u.codigo]=u);
+  let productoSeleccionado = null;
+
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal modal-light">
-    <h3>Agregar producto manualmente</h3>
-    <div class="field"><label>Código</label><input type="text" id="mCodigo"></div>
-    <div class="field"><label>Nombre</label><input type="text" id="mNombre"></div>
-    <div class="field"><label>Unidad de medida</label>
-      <select id="mUnidad"><option value="">Selecciona una unidad</option>${opcionesUnidad}</select>
+    <h3>Agregar producto</h3>
+    <div class="field" style="position:relative;">
+      <label>Producto</label>
+      <input type="text" id="mNombre" placeholder="Escribe para buscar..." autocomplete="off">
+      <div id="mSugerencias" class="sugerencias-lista"></div>
     </div>
+    <div class="field"><label>Código</label><input type="text" id="mCodigo" disabled></div>
+    <div class="field"><label>Unidad de medida</label><input type="text" id="mUnidad" disabled></div>
     <div class="field"><label>Precio</label><input type="number" id="mPrecio" step="0.01" min="0"></div>
     <div class="field"><label>Cantidad</label><input type="number" id="mCantidad" value="1" min="0.01" step="0.01"></div>
     <div class="row">
@@ -526,19 +535,56 @@ document.getElementById('btnAgregarManual').onclick = async ()=>{
     </div>
   </div>`;
   document.body.appendChild(overlay);
+
+  const inputNombre = document.getElementById('mNombre');
+  const sugerenciasDiv = document.getElementById('mSugerencias');
+
+  function limpiarSeleccion(){
+    productoSeleccionado = null;
+    document.getElementById('mCodigo').value = '';
+    document.getElementById('mUnidad').value = '';
+    document.getElementById('mPrecio').value = '';
+  }
+
+  function mostrarSugerencias(filtro){
+    const texto = filtro.trim().toLowerCase();
+    if(!texto){ sugerenciasDiv.innerHTML=''; sugerenciasDiv.style.display='none'; return; }
+    const coincidencias = productos.filter(p=>p.nombre.toLowerCase().includes(texto)).slice(0,8);
+    if(coincidencias.length===0){
+      sugerenciasDiv.innerHTML = '<div class="sugerencia-item">Sin coincidencias</div>';
+      sugerenciasDiv.style.display='block';
+      return;
+    }
+    sugerenciasDiv.innerHTML = coincidencias.map(p=>`<div class="sugerencia-item" data-codigo="${escapeHtml(p.codigo)}">${escapeHtml(p.nombre)}</div>`).join('');
+    sugerenciasDiv.style.display='block';
+    sugerenciasDiv.querySelectorAll('.sugerencia-item[data-codigo]').forEach(el=>{
+      el.onclick = ()=>{
+        const p = productos.find(pp=>pp.codigo===el.dataset.codigo);
+        productoSeleccionado = p;
+        inputNombre.value = p.nombre;
+        document.getElementById('mCodigo').value = p.codigo;
+        const u = unidadPorCodigo[p.unidadCodigo];
+        document.getElementById('mUnidad').value = u? (u.nombre+' ('+u.abreviatura+')') : '';
+        document.getElementById('mPrecio').value = p.precio!=null? p.precio : '';
+        sugerenciasDiv.innerHTML=''; sugerenciasDiv.style.display='none';
+      };
+    });
+  }
+
+  inputNombre.oninput = ()=>{ limpiarSeleccion(); mostrarSugerencias(inputNombre.value); };
+
   document.getElementById('btnCancelarManual').onclick = ()=>overlay.remove();
   document.getElementById('btnConfirmarManual').onclick = async ()=>{
-    const codigo = document.getElementById('mCodigo').value.trim();
-    const nombre = document.getElementById('mNombre').value.trim();
-    const unidadMedida = document.getElementById('mUnidad').value;
+    if(!productoSeleccionado){ toast('Selecciona un producto de la lista.'); return; }
     const precio = parseFloat(document.getElementById('mPrecio').value);
     const cantidad = parseFloat(document.getElementById('mCantidad').value);
-    if(!codigo || !nombre || !unidadMedida){ toast('Código, nombre y unidad son obligatorios.'); return; }
     if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
     if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.'); return; }
+    const u = unidadPorCodigo[productoSeleccionado.unidadCodigo];
+    const unidadMedida = u? u.nombre : '';
     const linea = {
-      idLinea: uid(), codigo, nombre, unidadMedida, precio, cantidad,
-      subtotal: +(precio*cantidad).toFixed(2)
+      idLinea: uid(), codigo:productoSeleccionado.codigo, nombre:productoSeleccionado.nombre,
+      unidadMedida, precio, cantidad, subtotal: +(precio*cantidad).toFixed(2)
     };
     reporteActivo.productos.push(linea);
     reporteActivo.totalReporte = reporteActivo.productos.reduce((s,p)=>s+p.subtotal,0);
@@ -605,13 +651,16 @@ function cerrarEscaner(stream, overlay){
   overlay.remove();
 }
 
-function procesarCodigo(raw){
+async function procesarCodigo(raw){
   const partes = raw.split(';').map(s=>s.trim());
-  if(partes.length < 4){ toast('QR con formato inválido.'); return; }
-  const [codigo,nombre,unidadMedida,precioStr] = partes;
-  const precio = parseFloat(precioStr.replace(/,/g,''));
-  if(isNaN(precio)){ toast('Precio inválido en el QR.'); return; }
-  pedirCantidad({codigo,nombre,unidadMedida,precio});
+  if(partes.length < 3){ toast('QR con formato inválido.'); return; }
+  const [codigo,nombre,unidadMedida] = partes;
+  const prod = await idbGet('productos', codigo);
+  if(!prod || prod.precio==null){
+    toast('Este producto no tiene precio definido en el catálogo. Agrégalo en Ajustes.');
+    return;
+  }
+  pedirCantidad({codigo,nombre,unidadMedida,precio:prod.precio});
 }
 
 function pedirCantidad(prod){
@@ -812,18 +861,6 @@ function dibujarBarras(canvasId, labels, valores, pasoEtiqueta=3){
 }
 
 async function sembrarCatalogosIniciales(){
-  const productosExistentes = await idbGetAll('productos');
-  if(productosExistentes.length===0){
-    const seedProductos = [
-      ['0001','pollo','001'], ['0002','arroz','001'], ['0003','aceite','003'],
-      ['0004','azúcar','001'], ['0005','sal','001'], ['0006','picadillo de pollo','001'],
-      ['0008','vinagre','007'], ['0009','cafe','005'], ['0010','lomo ahumado','001'],
-      ['0011','mantequilla','006']
-    ];
-    for(const [codigo,nombre,unidadCodigo] of seedProductos){
-      await idbAdd('productos',{codigo,nombre,unidadCodigo,cantidad:null});
-    }
-  }
   const unidadesExistentes = await idbGetAll('unidades');
   if(unidadesExistentes.length===0){
     const seedUnidades = [
@@ -835,6 +872,14 @@ async function sembrarCatalogosIniciales(){
       await idbAdd('unidades',{codigo,nombre,abreviatura});
     }
   }
+}
+
+async function reiniciarCatalogoProductosUnaVez(){
+  const flag = await idbGet('config','catalogoProductosReiniciadoV2');
+  if(flag) return;
+  const productos = await idbGetAll('productos');
+  for(const p of productos) await idbDelete('productos', p.codigo);
+  await idbPut('config', {clave:'catalogoProductosReiniciadoV2', valor:true});
 }
 
 /* ======================= PESTAÑA 4: AJUSTES (CATÁLOGO) ======================= */
@@ -857,11 +902,12 @@ async function renderCatalogo(){
     const unidadTexto = p.unidadCodigo && unidadPorCodigo[p.unidadCodigo]
       ? unidadPorCodigo[p.unidadCodigo].abreviatura
       : (p.unidadMedida || '');
+    const precioTexto = p.precio!=null ? p.precio.toFixed(2) : '0.00';
     return `
     <div class="producto-line">
       <div class="info">
         <div class="nombre">${escapeHtml(p.nombre)}</div>
-        <div class="detalle">${escapeHtml(p.codigo)} · ${escapeHtml(unidadTexto)}${p.cantidad!=null && p.cantidad!==''? ' · '+p.cantidad : ''}</div>
+        <div class="detalle">${escapeHtml(p.codigo)} · ${escapeHtml(unidadTexto)}&nbsp;&nbsp;$&nbsp;${precioTexto}</div>
       </div>
       <button class="secondary" style="padding:6px 10px;font-size:12px" onclick="editarProductoCatalogo('${p.codigo}')">Editar</button>
       <button class="link-danger" onclick="eliminarProductoCatalogo('${p.codigo}')">✕</button>
@@ -873,19 +919,17 @@ window.editarProductoCatalogo = async function(codigo){
   const prod = await idbGet('productos', codigo);
   if(!prod) return;
   const unidades = await idbGetAll('unidades');
-  const opciones = unidades.map(u=>
-    `<option value="${escapeHtml(u.codigo)}" ${u.codigo===prod.unidadCodigo?'selected':''}>${escapeHtml(u.nombre)} (${escapeHtml(u.abreviatura)})</option>`
-  ).join('');
+  const unidadPorCodigo = {}; unidades.forEach(u=>unidadPorCodigo[u.codigo]=u);
+  const u = unidadPorCodigo[prod.unidadCodigo];
+  const unidadTexto = u? (u.nombre+' ('+u.abreviatura+')') : '';
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal modal-light">
     <h3>Editar producto</h3>
-    <div class="field"><label>Código</label><input type="text" id="inCodigo" value="${escapeHtml(prod.codigo)}" disabled></div>
-    <div class="field"><label>Nombre</label><input type="text" id="inNombre" value="${escapeHtml(prod.nombre)}"></div>
-    <div class="field"><label>Unidad de medida</label>
-      <select id="inUnidad"><option value="">Selecciona una unidad</option>${opciones}</select>
-    </div>
-    <div class="field"><label>Cantidad (opcional)</label><input type="number" id="inCantidad" step="0.01" value="${prod.cantidad!=null? prod.cantidad : ''}"></div>
+    <div class="field"><label>Código</label><input type="text" value="${escapeHtml(prod.codigo)}" disabled></div>
+    <div class="field"><label>Nombre</label><input type="text" value="${escapeHtml(prod.nombre)}" disabled></div>
+    <div class="field"><label>Unidad de medida</label><input type="text" value="${escapeHtml(unidadTexto)}" disabled></div>
+    <div class="field"><label>Precio</label><input type="number" id="inPrecio" step="0.01" min="0" value="${prod.precio!=null? prod.precio : ''}"></div>
     <div class="row">
       <button class="secondary" id="btnCancelarProd">Cancelar</button>
       <button class="primary" id="btnGuardarProd">Guardar</button>
@@ -894,14 +938,9 @@ window.editarProductoCatalogo = async function(codigo){
   document.body.appendChild(overlay);
   document.getElementById('btnCancelarProd').onclick = ()=>overlay.remove();
   document.getElementById('btnGuardarProd').onclick = async ()=>{
-    const nombre = document.getElementById('inNombre').value.trim();
-    const unidadCodigo = document.getElementById('inUnidad').value;
-    const cantidadStr = document.getElementById('inCantidad').value;
-    if(!nombre || !unidadCodigo){ toast('Nombre y unidad son obligatorios.'); return; }
-    await idbPut('productos', {
-      codigo, nombre, unidadCodigo,
-      cantidad: cantidadStr!==''? parseFloat(cantidadStr) : null
-    });
+    const precio = parseFloat(document.getElementById('inPrecio').value);
+    if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
+    await idbPut('productos', { ...prod, precio });
     overlay.remove();
     renderCatalogo();
   };
@@ -932,7 +971,7 @@ document.getElementById('btnAgregarProducto').onclick = async ()=>{
     <div class="field"><label>Unidad de medida</label>
       <select id="inUnidad"><option value="">Selecciona una unidad</option>${opciones}</select>
     </div>
-    <div class="field"><label>Cantidad (opcional)</label><input type="number" id="inCantidad" step="0.01"></div>
+    <div class="field"><label>Precio</label><input type="number" id="inPrecio" step="0.01" min="0"></div>
     <div class="row">
       <button class="secondary" id="btnCancelarProd">Cancelar</button>
       <button class="primary" id="btnGuardarProd">Guardar</button>
@@ -944,14 +983,12 @@ document.getElementById('btnAgregarProducto').onclick = async ()=>{
     const codigo = document.getElementById('inCodigo').value.trim();
     const nombre = document.getElementById('inNombre').value.trim();
     const unidadCodigo = document.getElementById('inUnidad').value;
-    const cantidadStr = document.getElementById('inCantidad').value;
+    const precio = parseFloat(document.getElementById('inPrecio').value);
     if(!codigo || !nombre || !unidadCodigo){ toast('Código, nombre y unidad son obligatorios.'); return; }
+    if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
     const existente = await idbGet('productos', codigo);
     if(existente){ toast('Ya existe un producto con ese código.'); return; }
-    await idbAdd('productos', {
-      codigo, nombre, unidadCodigo,
-      cantidad: cantidadStr!==''? parseFloat(cantidadStr) : null
-    });
+    await idbAdd('productos', { codigo, nombre, unidadCodigo, precio });
     overlay.remove();
     renderCatalogo();
   };
@@ -1101,6 +1138,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn=>{
 (async function init(){
   await openDB();
   await sembrarCatalogosIniciales();
+  await reiniciarCatalogoProductosUnaVez();
   await cargarReporteActivo();
   await renderTab1();
   await renderListaVentas();
