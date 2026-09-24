@@ -123,8 +123,9 @@ window.addEventListener('error', function(e){
   .venta-producto-line{display:flex; justify-content:space-between; font-size:11px; color:var(--muted-dark); padding:2px 0;}
   .toast{
     position:fixed; bottom:76px; left:50%; transform:translateX(-50%);
-    background:var(--primary-dark); color:var(--text); padding:10px 16px; border-radius:0;
-    font-size:13px; z-index:80; opacity:0; transition:opacity .2s; border:1px solid var(--border);
+    background:var(--surface); color:var(--text-dark); padding:10px 16px; border-radius:0;
+    font-size:13px; z-index:80; opacity:0; transition:opacity .2s; border:1px solid var(--border-light);
+    max-width:85%; text-align:center;
   }
   .toast.show{opacity:1;}
 </style>
@@ -291,8 +292,9 @@ function pad(n){return n.toString().padStart(2,'0');}
 function todayStr(d=new Date()){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function money(n){return '$'+(Number(n)||0).toFixed(2);}
 function uid(){return 'p'+Date.now()+Math.random().toString(16).slice(2,8);}
-function toast(msg){
-  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+function toast(msg, tipo){
+  const iconos = {warning:'⚠️ ', error:'⛔ '};
+  const t=document.getElementById('toast'); t.textContent=(iconos[tipo]||'')+msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2200);
 }
 document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es',{weekday:'short',day:'numeric',month:'short'});
@@ -485,12 +487,12 @@ document.getElementById('btnBorrarReporte').onclick = async ()=>{
 };
 
 document.getElementById('btnFinVenta').onclick = async ()=>{
-  if(reporteActivo.productos.length===0){ toast('Agrega al menos un producto antes de cerrar.'); return; }
+  if(reporteActivo.productos.length===0){ toast('Agrega al menos un producto antes de cerrar.', 'warning'); return; }
   if(reporteActivo.metodoPago === 'mixto'){
     const transferencia = parseFloat(document.getElementById('inPagoTransferencia').value) || 0;
     const efectivo = parseFloat(document.getElementById('inPagoEfectivo').value) || 0;
     if(Math.abs((transferencia + efectivo) - reporteActivo.totalReporte) > 0.01){
-      toast('La suma de transferencia y efectivo no coincide con el total de la venta.');
+      toast('La suma de transferencia y efectivo no coincide con el total de la venta.', 'error');
       return;
     }
     reporteActivo.pagoTransferencia = transferencia;
@@ -527,7 +529,7 @@ document.getElementById('btnAgregarManual').onclick = async ()=>{
     </div>
     <div class="field"><label>Código</label><input type="text" id="mCodigo" disabled></div>
     <div class="field"><label>Unidad de medida</label><input type="text" id="mUnidad" disabled></div>
-    <div class="field"><label>Precio</label><input type="number" id="mPrecio" step="0.01" min="0"></div>
+    <div class="field"><label>Precio</label><input type="number" id="mPrecio" step="0.01" min="0" disabled></div>
     <div class="field"><label>Cantidad</label><input type="number" id="mCantidad" value="1" min="0.01" step="0.01"></div>
     <div class="row">
       <button class="secondary" id="btnCancelarManual">Cancelar</button>
@@ -548,8 +550,9 @@ document.getElementById('btnAgregarManual').onclick = async ()=>{
 
   function mostrarSugerencias(filtro){
     const texto = filtro.trim().toLowerCase();
-    if(!texto){ sugerenciasDiv.innerHTML=''; sugerenciasDiv.style.display='none'; return; }
-    const coincidencias = productos.filter(p=>p.nombre.toLowerCase().includes(texto)).slice(0,8);
+    const coincidencias = texto
+      ? productos.filter(p=>p.nombre.toLowerCase().includes(texto)).slice(0,8)
+      : productos;
     if(coincidencias.length===0){
       sugerenciasDiv.innerHTML = '<div class="sugerencia-item">Sin coincidencias</div>';
       sugerenciasDiv.style.display='block';
@@ -572,14 +575,15 @@ document.getElementById('btnAgregarManual').onclick = async ()=>{
   }
 
   inputNombre.oninput = ()=>{ limpiarSeleccion(); mostrarSugerencias(inputNombre.value); };
+  inputNombre.onfocus = ()=>{ mostrarSugerencias(inputNombre.value); };
 
   document.getElementById('btnCancelarManual').onclick = ()=>overlay.remove();
   document.getElementById('btnConfirmarManual').onclick = async ()=>{
-    if(!productoSeleccionado){ toast('Selecciona un producto de la lista.'); return; }
+    if(!productoSeleccionado){ toast('Selecciona un producto de la lista.', 'error'); return; }
     const precio = parseFloat(document.getElementById('mPrecio').value);
     const cantidad = parseFloat(document.getElementById('mCantidad').value);
-    if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
-    if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.'); return; }
+    if(isNaN(precio) || precio<0){ toast('Precio inválido.', 'error'); return; }
+    if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.', 'error'); return; }
     const u = unidadPorCodigo[productoSeleccionado.unidadCodigo];
     const unidadMedida = u? u.nombre : '';
     const linea = {
@@ -616,7 +620,7 @@ async function abrirEscaner(){
     stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
   }catch(err){
     overlay.remove();
-    toast('No se pudo acceder a la cámara.');
+    toast('No se pudo acceder a la cámara.', 'error');
     return;
   }
   const video = document.getElementById('videoScan');
@@ -653,11 +657,11 @@ function cerrarEscaner(stream, overlay){
 
 async function procesarCodigo(raw){
   const partes = raw.split(';').map(s=>s.trim());
-  if(partes.length < 3){ toast('QR con formato inválido.'); return; }
+  if(partes.length < 3){ toast('QR con formato inválido.', 'error'); return; }
   const [codigo,nombre,unidadMedida] = partes;
   const prod = await idbGet('productos', codigo);
   if(!prod || prod.precio==null){
-    toast('Este producto no tiene precio definido en el catálogo. Agrégalo en Ajustes.');
+    toast('Este producto no tiene precio definido en el catálogo. Agrégalo en Ajustes.', 'error');
     return;
   }
   pedirCantidad({codigo,nombre,unidadMedida,precio:prod.precio});
@@ -684,7 +688,7 @@ function pedirCantidad(prod){
   document.getElementById('btnCancelarCant').onclick = ()=>overlay.remove();
   document.getElementById('btnConfirmarCant').onclick = async ()=>{
     const cantidad = parseFloat(input.value);
-    if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.'); return; }
+    if(isNaN(cantidad) || cantidad<=0){ toast('Cantidad inválida.', 'error'); return; }
     const linea = {
       idLinea: uid(), codigo:prod.codigo, nombre:prod.nombre, unidadMedida:prod.unidadMedida,
       precio:prod.precio, cantidad, subtotal: +(prod.precio*cantidad).toFixed(2)
@@ -770,7 +774,7 @@ async function renderTab3(){
   const dias7 = [];
   for(let i=6;i>=0;i--) dias7.push(fechaOffset(i));
   const totalesPorDia = dias7.map(f=>cerradosTodos.filter(r=>r.fecha===f).reduce((s,r)=>s+r.totalReporte,0));
-  dibujarBarras('chartTendencia', dias7.map(f=>f.slice(5)), totalesPorDia, 1);
+  dibujarBarras('chartTendencia', dias7.map(f=>{const [,m,d]=f.split('-'); return d+'-'+m;}), totalesPorDia, 1);
 
   // Semana actual vs semana anterior
   const diasSemanaActual = []; for(let i=0;i<7;i++) diasSemanaActual.push(fechaOffset(i));
@@ -808,37 +812,42 @@ async function renderTab3(){
       <div class="rank-row"><span>${r.fecha}</span><span>${money(r.totalVendido)} · ${r.cantidadReportes} reportes</span></div>`).join('')
     : '<div class="empty-state">Sin datos aún.</div>';
 
-  // Ventas por día (navegación de una venta a la vez)
-  historicoVentas = cerradosTodos.slice().sort((a,b)=>b.horaCierre-a.horaCierre);
+  // Ventas por día (navegación día por día, mostrando todas las ventas de ese día)
+  const porFecha = {};
+  cerradosTodos.forEach(r=>{ (porFecha[r.fecha] = porFecha[r.fecha] || []).push(r); });
+  historicoFechas = Object.keys(porFecha).sort((a,b)=>b.localeCompare(a));
+  historicoVentasPorFecha = porFecha;
   historicoIndice = 0;
   renderVentaPorDiaActual();
 }
 
-let historicoVentas = [];
+let historicoFechas = [];
+let historicoVentasPorFecha = {};
 let historicoIndice = 0;
 
 function renderVentaPorDiaActual(){
   const cont = document.getElementById('ventasPorDia');
   const contador = document.getElementById('ventaPorDiaContador');
-  if(historicoVentas.length===0){
+  if(historicoFechas.length===0){
     cont.innerHTML = '<div class="empty-state">Sin datos aún.</div>';
     contador.textContent = '0 / 0';
     return;
   }
-  const r = historicoVentas[historicoIndice];
-  cont.innerHTML = `<div style="text-align:center;font-size:12px;color:var(--muted-dark);margin-bottom:6px;">${r.fecha}</div>` + renderizarVentaHTML(r);
-  contador.textContent = (historicoIndice+1) + ' / ' + historicoVentas.length;
+  const fecha = historicoFechas[historicoIndice];
+  const ventasDelDia = historicoVentasPorFecha[fecha].sort((a,b)=>b.horaCierre-a.horaCierre);
+  cont.innerHTML = `<div style="text-align:center;font-size:12px;color:var(--muted-dark);margin-bottom:6px;">${fecha}</div>` + ventasDelDia.map(renderizarVentaHTML).join('');
+  contador.textContent = (historicoIndice+1) + ' / ' + historicoFechas.length;
 }
 
 document.getElementById('btnVentaAnterior').onclick = ()=>{
-  if(historicoVentas.length===0) return;
-  historicoIndice = (historicoIndice - 1 + historicoVentas.length) % historicoVentas.length;
+  if(historicoFechas.length===0) return;
+  historicoIndice = (historicoIndice - 1 + historicoFechas.length) % historicoFechas.length;
   renderVentaPorDiaActual();
 };
 
 document.getElementById('btnVentaSiguiente').onclick = ()=>{
-  if(historicoVentas.length===0) return;
-  historicoIndice = (historicoIndice + 1) % historicoVentas.length;
+  if(historicoFechas.length===0) return;
+  historicoIndice = (historicoIndice + 1) % historicoFechas.length;
   renderVentaPorDiaActual();
 };
 
@@ -939,7 +948,7 @@ window.editarProductoCatalogo = async function(codigo){
   document.getElementById('btnCancelarProd').onclick = ()=>overlay.remove();
   document.getElementById('btnGuardarProd').onclick = async ()=>{
     const precio = parseFloat(document.getElementById('inPrecio').value);
-    if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
+    if(isNaN(precio) || precio<0){ toast('Precio inválido.', 'error'); return; }
     await idbPut('productos', { ...prod, precio });
     overlay.remove();
     renderCatalogo();
@@ -949,7 +958,7 @@ window.editarProductoCatalogo = async function(codigo){
 window.eliminarProductoCatalogo = async function(codigo){
   const tieneOps = await codigoTieneOperaciones(codigo);
   if(tieneOps){
-    toast('No se puede eliminar: este producto tiene operaciones registradas.');
+    toast('No se puede eliminar: este producto tiene operaciones registradas.', 'warning');
     return;
   }
   if(!confirm('¿Eliminar este producto del catálogo?')) return;
@@ -984,10 +993,10 @@ document.getElementById('btnAgregarProducto').onclick = async ()=>{
     const nombre = document.getElementById('inNombre').value.trim();
     const unidadCodigo = document.getElementById('inUnidad').value;
     const precio = parseFloat(document.getElementById('inPrecio').value);
-    if(!codigo || !nombre || !unidadCodigo){ toast('Código, nombre y unidad son obligatorios.'); return; }
-    if(isNaN(precio) || precio<0){ toast('Precio inválido.'); return; }
+    if(!codigo || !nombre || !unidadCodigo){ toast('Código, nombre y unidad son obligatorios.', 'error'); return; }
+    if(isNaN(precio) || precio<0){ toast('Precio inválido.', 'error'); return; }
     const existente = await idbGet('productos', codigo);
-    if(existente){ toast('Ya existe un producto con ese código.'); return; }
+    if(existente){ toast('Ya existe un producto con ese código.', 'error'); return; }
     await idbAdd('productos', { codigo, nombre, unidadCodigo, precio });
     overlay.remove();
     renderCatalogo();
@@ -1029,9 +1038,9 @@ document.getElementById('btnAgregarUnidad').onclick = ()=>{
     const codigo = document.getElementById('inCodU').value.trim();
     const nombre = document.getElementById('inNombreU').value.trim();
     const abreviatura = document.getElementById('inAbrevU').value.trim();
-    if(!codigo || !nombre || !abreviatura){ toast('Código, nombre y abreviatura son obligatorios.'); return; }
+    if(!codigo || !nombre || !abreviatura){ toast('Código, nombre y abreviatura son obligatorios.', 'error'); return; }
     const existente = await idbGet('unidades', codigo);
-    if(existente){ toast('Ya existe una unidad con ese código.'); return; }
+    if(existente){ toast('Ya existe una unidad con ese código.', 'error'); return; }
     await idbAdd('unidades', {codigo, nombre, abreviatura});
     overlay.remove();
     renderUnidades();
@@ -1041,7 +1050,7 @@ document.getElementById('btnExportar').onclick = async ()=>{
   const fecha = todayStr();
   const todos = await idbGetAll('reportes');
   const cerradosHoy = todos.filter(r=>r.fecha===fecha && r.estado==='cerrado');
-  if(cerradosHoy.length===0){ toast('No hay ventas cerradas hoy para exportar.'); return; }
+  if(cerradosHoy.length===0){ toast('No hay ventas cerradas hoy para exportar.', 'warning'); return; }
 
   let filas = '';
   const celda = (v,tipo='String')=>`<Cell><Data ss:Type="${tipo}">${escapeXml(String(v))}</Data></Cell>`;
