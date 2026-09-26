@@ -71,7 +71,7 @@ window.addEventListener('error', function(e){
     background:var(--primary-dark); color:var(--text); font-weight:700; border:1px solid var(--danger);
     border-radius:0; padding:8px 12px; font-size:13px; cursor:pointer;
   }
-  button.link-danger{background:none;border:none;color:var(--text);font-weight:700;font-size:13px;cursor:pointer;padding:4px 8px;}
+  button.link-danger{background:none;border:none;color:var(--text-dark);font-weight:700;font-size:13px;cursor:pointer;padding:4px 8px;}
   .row{display:flex; gap:10px;}
   .row > *{flex:1;}
   input[type=text], input[type=number], select{
@@ -208,6 +208,9 @@ window.addEventListener('error', function(e){
   <!-- PESTAÑA 3: ANÁLISIS -->
   <section id="tab3" class="tab-content">
     <div class="card">
+      <button class="primary" id="btnExportarPDF">Exportar PDF (reporte completo)</button>
+    </div>
+    <div class="card">
       <h2>Ventas por hora (hoy)</h2>
       <canvas id="chartHoras"></canvas>
     </div>
@@ -261,11 +264,21 @@ window.addEventListener('error', function(e){
     <div class="card">
       <h2>Catálogo de productos</h2>
       <button class="primary" id="btnAgregarProducto" style="margin-bottom:12px">+ Agregar producto</button>
+      <div class="row" style="margin-bottom:12px">
+        <button class="secondary" id="btnImportarProductos">Importar CSV</button>
+        <button class="secondary" id="btnExportarProductos">Exportar CSV</button>
+      </div>
+      <input type="file" id="inputImportarProductos" accept=".csv" style="display:none">
       <div id="listaCatalogo"><div class="empty-state">Aún no hay productos en el catálogo.</div></div>
     </div>
     <div class="card">
       <h2>Catálogo de unidades de medida</h2>
       <button class="primary" id="btnAgregarUnidad" style="margin-bottom:12px">+ Agregar unidad</button>
+      <div class="row" style="margin-bottom:12px">
+        <button class="secondary" id="btnImportarUnidades">Importar CSV</button>
+        <button class="secondary" id="btnExportarUnidades">Exportar CSV</button>
+      </div>
+      <input type="file" id="inputImportarUnidades" accept=".csv" style="display:none">
       <div id="listaUnidades"><div class="empty-state">Aún no hay unidades registradas.</div></div>
     </div>
     <div class="card">
@@ -966,6 +979,49 @@ window.eliminarProductoCatalogo = async function(codigo){
   renderCatalogo();
 };
 
+document.getElementById('btnImportarProductos').onclick = ()=> document.getElementById('inputImportarProductos').click();
+document.getElementById('inputImportarProductos').onchange = async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const texto = await file.text();
+  const unidades = await idbGetAll('unidades');
+  const lineas = texto.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  let importados=0, omitidos=0;
+  for(const linea of lineas){
+    const partes = linea.split(';').map(s=>s.trim());
+    if(partes.length<5) continue;
+    const [codigo,nombre,unidadTexto,cantidadStr,precioStr] = partes;
+    const existente = await idbGet('productos', codigo);
+    if(existente){ omitidos++; continue; }
+    const u = unidades.find(u=>u.codigo===unidadTexto || u.nombre.toLowerCase()===unidadTexto.toLowerCase() || u.abreviatura.toLowerCase()===unidadTexto.toLowerCase());
+    const precio = parseFloat(precioStr);
+    const cantidad = cantidadStr!==''? parseFloat(cantidadStr) : null;
+    const prod = { codigo, nombre, precio: isNaN(precio)? null : precio, cantidad: (cantidad!=null && !isNaN(cantidad))? cantidad : null };
+    if(u) prod.unidadCodigo = u.codigo; else prod.unidadMedida = unidadTexto;
+    await idbAdd('productos', prod);
+    importados++;
+  }
+  e.target.value='';
+  renderCatalogo();
+  toast(`Importados: ${importados}. Omitidos (ya existían): ${omitidos}.`);
+};
+
+document.getElementById('btnExportarProductos').onclick = async ()=>{
+  const productos = await idbGetAll('productos');
+  if(productos.length===0){ toast('No hay productos para exportar.', 'warning'); return; }
+  const unidades = await idbGetAll('unidades');
+  const unidadPorCodigo = {}; unidades.forEach(u=>unidadPorCodigo[u.codigo]=u);
+  const filas = productos.map(p=>{
+    const unidadTexto = p.unidadCodigo && unidadPorCodigo[p.unidadCodigo] ? unidadPorCodigo[p.unidadCodigo].nombre : (p.unidadMedida||'');
+    return [p.codigo, p.nombre, unidadTexto, p.cantidad!=null? p.cantidad:'', p.precio!=null? p.precio:''].join(';');
+  });
+  const blob = new Blob([filas.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'productos.csv';
+  a.click();
+};
+
 document.getElementById('btnAgregarProducto').onclick = async ()=>{
   const unidades = await idbGetAll('unidades');
   const opciones = unidades.map(u=>
@@ -1018,6 +1074,38 @@ async function renderUnidades(){
       </div>
     </div>`).join('');
 }
+
+document.getElementById('btnImportarUnidades').onclick = ()=> document.getElementById('inputImportarUnidades').click();
+document.getElementById('inputImportarUnidades').onchange = async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const texto = await file.text();
+  const lineas = texto.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  let importados=0, omitidos=0;
+  for(const linea of lineas){
+    const partes = linea.split(';').map(s=>s.trim());
+    if(partes.length<3) continue;
+    const [codigo,nombre,abreviatura] = partes;
+    const existente = await idbGet('unidades', codigo);
+    if(existente){ omitidos++; continue; }
+    await idbAdd('unidades', {codigo,nombre,abreviatura});
+    importados++;
+  }
+  e.target.value='';
+  renderUnidades();
+  toast(`Importadas: ${importados}. Omitidas (ya existían): ${omitidos}.`);
+};
+
+document.getElementById('btnExportarUnidades').onclick = async ()=>{
+  const unidades = await idbGetAll('unidades');
+  if(unidades.length===0){ toast('No hay unidades para exportar.', 'warning'); return; }
+  const filas = unidades.map(u=>[u.codigo,u.nombre,u.abreviatura].join(';'));
+  const blob = new Blob([filas.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'unidades.csv';
+  a.click();
+};
 
 document.getElementById('btnAgregarUnidad').onclick = ()=>{
   const overlay = document.createElement('div');
@@ -1126,6 +1214,76 @@ document.getElementById('btnDiagnostico').onclick = async ()=>{
     lineas.push('Cache Storage no soportado en este navegador.');
   }
   out.textContent = lineas.join('\n');
+};
+
+/* ======================= EXPORTAR PDF (PESTAÑA ANÁLISIS) ======================= */
+document.getElementById('btnExportarPDF').onclick = async ()=>{
+  const nombreNegocio = document.querySelector('.negocio-nombre')?.textContent.trim() || '';
+  const fechaHoy = new Date().toLocaleDateString('es',{day:'numeric',month:'long',year:'numeric'});
+
+  const imgHoras = document.getElementById('chartHoras').toDataURL('image/png');
+  const imgTendencia = document.getElementById('chartTendencia').toDataURL('image/png');
+  const rankingHTML = document.getElementById('ranking').innerHTML;
+  const semanaActual = document.getElementById('a-semanaActual').textContent;
+  const semanaAnterior = document.getElementById('a-semanaAnterior').textContent;
+  const participacionHTML = document.getElementById('participacion').innerHTML;
+  const rankingHistoricoHTML = document.getElementById('rankingHistorico').innerHTML;
+  const historicoHTML = document.getElementById('historico').innerHTML;
+
+  const todos = await idbGetAll('reportes');
+  const cerrados = todos.filter(r=>r.estado==='cerrado');
+  const porFecha = {};
+  cerrados.forEach(r=>{ (porFecha[r.fecha]=porFecha[r.fecha]||[]).push(r); });
+  const fechas = Object.keys(porFecha).sort((a,b)=>b.localeCompare(a));
+  const ventasPorDiaHTML = fechas.length ? fechas.map(f=>{
+    const ventas = porFecha[f].sort((a,b)=>b.horaCierre-a.horaCierre);
+    return `<h3>${f}</h3>` + ventas.map(renderizarVentaHTML).join('');
+  }).join('') : '<p>Sin datos.</p>';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte - ${escapeHtml(nombreNegocio)}</title>
+  <style>
+    body{font-family:Arial,sans-serif; padding:20px; color:#12314F;}
+    h1{font-size:20px;margin:0;}
+    h2{font-size:16px;margin:22px 0 8px 0; border-bottom:1px solid #999; padding-bottom:4px;}
+    h3{font-size:13px;margin:14px 0 4px 0;}
+    .encabezado-linea2{font-size:14px;margin:4px 0 12px 0;}
+    hr{border:none;border-top:2px solid #333;margin:8px 0 18px 0;}
+    img{max-width:100%;}
+    .top-item, .rank-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #ddd;}
+    .venta-cerrada{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc;}
+    .venta-productos{padding-left:10px;}
+    .venta-producto-line{display:flex;justify-content:space-between;font-size:11px;color:#555;}
+    .empty-state{color:#777;font-size:12px;}
+  </style></head><body>
+    <h1>${escapeHtml(nombreNegocio)}</h1>
+    <div class="encabezado-linea2">Datos de operaciones — ${fechaHoy}</div>
+    <hr>
+    <h2>Ventas por hora (hoy)</h2>
+    <img src="${imgHoras}">
+    <h2>Ranking de productos (hoy)</h2>
+    ${rankingHTML}
+    <h2>Tendencia de ventas (últimos 7 días)</h2>
+    <img src="${imgTendencia}">
+    <h2>Semana actual vs. semana anterior</h2>
+    <p>Esta semana: ${semanaActual} &nbsp;&nbsp;&nbsp; Semana anterior: ${semanaAnterior}</p>
+    <h2>Participación de productos en ventas (histórico)</h2>
+    ${participacionHTML}
+    <h2>Ranking histórico de más vendidos</h2>
+    ${rankingHistoricoHTML}
+    <h2>Histórico diario</h2>
+    ${historicoHTML}
+    <h2>Ventas por día (detalle completo)</h2>
+    ${ventasPorDiaHTML}
+  </body></html>`;
+
+  const ventana = window.open('', '_blank');
+  if(!ventana){
+    toast('El navegador bloqueó la ventana. Permite ventanas emergentes e inténtalo de nuevo.', 'error');
+    return;
+  }
+  ventana.document.write(html);
+  ventana.document.close();
+  ventana.onload = ()=> ventana.print();
 };
 
 /* ======================= NAVEGACIÓN DE PESTAÑAS ======================= */
