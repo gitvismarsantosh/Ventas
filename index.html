@@ -192,6 +192,10 @@ window.addEventListener('error', function(e){
       <div id="camposMixto" style="display:none; margin-top:10px;">
         <div class="field"><label>Pagado por transferencia</label><input type="number" id="inPagoTransferencia" step="0.01" min="0"></div>
         <div class="field"><label>Pagado en efectivo</label><input type="number" id="inPagoEfectivo" step="0.01" min="0"></div>
+        <div class="field"><label>Número de transferencia</label><input type="text" id="inNumTransferenciaMixta"></div>
+      </div>
+      <div id="campoTransferenciaSimple" style="display:none; margin-top:10px;">
+        <div class="field"><label>Número de transferencia</label><input type="text" id="inNumTransferenciaSimple"></div>
       </div>
       <div class="row" style="margin-top:14px">
         <button class="danger" id="btnBorrarReporte">Eliminar reporte</button>
@@ -436,12 +440,20 @@ function renderTab2(){
   }
   document.getElementById('rTotal').textContent = 'Total: '+money(reporteActivo.totalReporte);
   const camposMixto = document.getElementById('camposMixto');
+  const campoTransferenciaSimple = document.getElementById('campoTransferenciaSimple');
   if(reporteActivo.metodoPago === 'mixto'){
     camposMixto.style.display = 'block';
+    campoTransferenciaSimple.style.display = 'none';
     document.getElementById('inPagoTransferencia').value = reporteActivo.pagoTransferencia!=null? reporteActivo.pagoTransferencia : '';
     document.getElementById('inPagoEfectivo').value = reporteActivo.pagoEfectivo!=null? reporteActivo.pagoEfectivo : '';
+    document.getElementById('inNumTransferenciaMixta').value = reporteActivo.numeroTransferencia || '';
+  } else if(reporteActivo.metodoPago === 'transferencia'){
+    camposMixto.style.display = 'none';
+    campoTransferenciaSimple.style.display = 'block';
+    document.getElementById('inNumTransferenciaSimple').value = reporteActivo.numeroTransferencia || '';
   } else {
     camposMixto.style.display = 'none';
+    campoTransferenciaSimple.style.display = 'none';
   }
 }
 
@@ -460,9 +472,14 @@ function renderizarVentaHTML(r){
         <span>Efect.: ${money(r.pagoEfectivo)} | Transf.: ${money(r.pagoTransferencia)}</span>
       </div>`
     : '';
+  const detalleNumTransferencia = r.numeroTransferencia
+    ? `<div class="venta-producto-line" style="font-size:11px; margin-top:4px; font-weight:700;">
+        <span>N° Transferencia: ${escapeHtml(r.numeroTransferencia)}</span>
+      </div>`
+    : '';
   return `<div class="venta-cerrada">
     <div class="top-item"><span>${escapeHtml(nombre)} · ${hora}${pagoTexto? ' | '+pagoTexto : ''}</span><span>${money(r.totalReporte)}</span></div>
-    <div class="venta-productos">${productosHtml}${detalleMixto}</div>
+    <div class="venta-productos">${productosHtml}${detalleMixto}${detalleNumTransferencia}</div>
   </div>`;
 }
 
@@ -510,6 +527,9 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
     }
     reporteActivo.pagoTransferencia = transferencia;
     reporteActivo.pagoEfectivo = efectivo;
+    reporteActivo.numeroTransferencia = document.getElementById('inNumTransferenciaMixta').value.trim() || null;
+  } else if(reporteActivo.metodoPago === 'transferencia'){
+    reporteActivo.numeroTransferencia = document.getElementById('inNumTransferenciaSimple').value.trim() || null;
   }
   if(!confirm('¿Finalizar y guardar esta venta? No podrá modificarse después.')) return;
   reporteActivo.estado='cerrado';
