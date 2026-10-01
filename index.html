@@ -128,6 +128,10 @@ window.addEventListener('error', function(e){
     max-width:85%; text-align:center;
   }
   .toast.show{opacity:1;}
+  .hallazgo-item{padding:10px 0; border-bottom:1px solid var(--border-light);}
+  .hallazgo-item:last-child{border-bottom:none;}
+  .hallazgo-categoria{font-weight:700; font-size:11px; letter-spacing:.5px;}
+  .hallazgo-texto{font-size:13px; color:var(--text-dark); margin-top:2px;}
 </style>
 </head>
 <body>
@@ -292,6 +296,15 @@ window.addEventListener('error', function(e){
     </div>
   </section>
 
+  <!-- PESTAÑA 5: ASESOR -->
+  <section id="tab5" class="tab-content">
+    <div class="card">
+      <h2>Asesor del negocio</h2>
+      <p style="font-size:12px;color:var(--muted-dark);margin-top:-4px">Hallazgos generados automáticamente a partir de tus ventas, no solo estadísticas.</p>
+      <div id="listaHallazgos"><div class="empty-state">Analizando...</div></div>
+    </div>
+  </section>
+
 </main>
 
 <nav class="tabbar">
@@ -299,6 +312,7 @@ window.addEventListener('error', function(e){
   <button data-tab="2"><span class="icon">🧾</span>Venta</button>
   <button data-tab="3"><span class="icon">📈</span>Análisis</button>
   <button data-tab="4"><span class="icon">⚙️</span>Ajustes</button>
+  <button data-tab="5"><span class="icon">💡</span>Asesor</button>
 </nav>
 
 <div id="toast" class="toast"></div>
@@ -435,7 +449,7 @@ function renderTab2(){
           <div class="detalle">${p.cantidad} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</div>
         </div>
         <div class="subtotal">${money(p.subtotal)}</div>
-        <button class="link-danger" onclick="eliminarLinea('${p.idLinea}')">✕</button>
+        <button class="link-danger" style="color:var(--danger)" onclick="eliminarLinea('${p.idLinea}')">✕</button>
       </div>`).join('');
   }
   document.getElementById('rTotal').textContent = 'Total: '+money(reporteActivo.totalReporte);
@@ -1009,14 +1023,13 @@ document.getElementById('inputImportarProductos').onchange = async (e)=>{
   let importados=0, omitidos=0;
   for(const linea of lineas){
     const partes = linea.split(';').map(s=>s.trim());
-    if(partes.length<5) continue;
-    const [codigo,nombre,unidadTexto,cantidadStr,precioStr] = partes;
+    if(partes.length<4) continue;
+    const [codigo,nombre,unidadTexto,precioStr] = partes;
     const existente = await idbGet('productos', codigo);
     if(existente){ omitidos++; continue; }
     const u = unidades.find(u=>u.codigo===unidadTexto || u.nombre.toLowerCase()===unidadTexto.toLowerCase() || u.abreviatura.toLowerCase()===unidadTexto.toLowerCase());
     const precio = parseFloat(precioStr);
-    const cantidad = cantidadStr!==''? parseFloat(cantidadStr) : null;
-    const prod = { codigo, nombre, precio: isNaN(precio)? null : precio, cantidad: (cantidad!=null && !isNaN(cantidad))? cantidad : null };
+    const prod = { codigo, nombre, precio: isNaN(precio)? null : precio };
     if(u) prod.unidadCodigo = u.codigo; else prod.unidadMedida = unidadTexto;
     await idbAdd('productos', prod);
     importados++;
@@ -1033,7 +1046,7 @@ document.getElementById('btnExportarProductos').onclick = async ()=>{
   const unidadPorCodigo = {}; unidades.forEach(u=>unidadPorCodigo[u.codigo]=u);
   const filas = productos.map(p=>{
     const unidadTexto = p.unidadCodigo && unidadPorCodigo[p.unidadCodigo] ? unidadPorCodigo[p.unidadCodigo].nombre : (p.unidadMedida||'');
-    return [p.codigo, p.nombre, unidadTexto, p.cantidad!=null? p.cantidad:'', p.precio!=null? p.precio:''].join(';');
+    return [p.codigo, p.nombre, unidadTexto, p.precio!=null? p.precio:''].join(';');
   });
   const blob = new Blob([filas.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
@@ -1306,6 +1319,140 @@ document.getElementById('btnExportarPDF').onclick = async ()=>{
   ventana.onload = ()=> ventana.print();
 };
 
+/* ======================= PESTAÑA 5: ASESOR DEL NEGOCIO ======================= */
+async function renderAsesor(){
+  const cont = document.getElementById('listaHallazgos');
+  const todos = await idbGetAll('reportes');
+  const cerrados = todos.filter(r=>r.estado==='cerrado');
+  if(cerrados.length < 5){
+    cont.innerHTML = '<div class="empty-state">Aún no hay suficientes ventas registradas para generar hallazgos.</div>';
+    return;
+  }
+
+  function fOffset(n){ const d=new Date(); d.setDate(d.getDate()-n); return todayStr(d); }
+  const diasReciente = []; for(let i=0;i<14;i++) diasReciente.push(fOffset(i));
+  const diasAnterior = []; for(let i=14;i<28;i++) diasAnterior.push(fOffset(i));
+  const recientes = cerrados.filter(r=>diasReciente.includes(r.fecha));
+  const anteriores = cerrados.filter(r=>diasAnterior.includes(r.fecha));
+
+  const hallazgos = [];
+
+  function agregarPorProducto(lista){
+    const agg = {};
+    lista.forEach(r=>r.productos.forEach(p=>{
+      if(!agg[p.nombre]) agg[p.nombre] = {cantidad:0, ingreso:0};
+      agg[p.nombre].cantidad += p.cantidad;
+      agg[p.nombre].ingreso += p.subtotal;
+    }));
+    return agg;
+  }
+  const aggReciente = agregarPorProducto(recientes);
+  const aggAnterior = agregarPorProducto(anteriores);
+  const nombresProductos = new Set([...Object.keys(aggReciente), ...Object.keys(aggAnterior)]);
+
+  nombresProductos.forEach(nombre=>{
+    const rec = aggReciente[nombre] || {cantidad:0,ingreso:0};
+    const ant = aggAnterior[nombre] || {cantidad:0,ingreso:0};
+    if(ant.ingreso >= 5){
+      const cambio = (rec.ingreso - ant.ingreso) / ant.ingreso;
+      if(cambio >= 0.20){
+        hallazgos.push({categoria:'OPORTUNIDAD', texto:`El producto ${nombre} aumentó sus ventas un ${Math.round(cambio*100)}% en las últimas 2 semanas.`, peso:cambio});
+      } else if(cambio <= -0.20){
+        hallazgos.push({categoria:'ATENCIÓN', texto:`El producto ${nombre} redujo sus ventas un ${Math.round(Math.abs(cambio)*100)}% en las últimas 2 semanas.`, peso:Math.abs(cambio)});
+      }
+    }
+    if(ant.cantidad>=1 && rec.cantidad >= ant.cantidad*1.3 && rec.cantidad>=3){
+      hallazgos.push({categoria:'REPOSICIÓN', texto:`El ritmo de venta de ${nombre} aumentó en las últimas 2 semanas; considera reabastecerlo pronto.`, peso:(rec.cantidad-ant.cantidad)});
+    }
+  });
+
+  const conteoA = {};
+  const conteoPar = {};
+  cerrados.forEach(r=>{
+    const nombres = [...new Set(r.productos.map(p=>p.nombre))];
+    nombres.forEach(a=>{ conteoA[a] = (conteoA[a]||0)+1; });
+    nombres.forEach(a=>{ nombres.forEach(c=>{
+      if(a===c) return;
+      const key = a+'|'+c;
+      conteoPar[key] = (conteoPar[key]||0)+1;
+    }); });
+  });
+  const paresVistos = new Set();
+  Object.keys(conteoPar).forEach(key=>{
+    const [a,c] = key.split('|');
+    if(paresVistos.has(a)) return;
+    if(conteoA[a] >= 4){
+      const pct = conteoPar[key]/conteoA[a];
+      if(pct >= 0.3){
+        hallazgos.push({categoria:'OPORTUNIDAD', texto:`Los productos ${a} y ${c} aparecen juntos en el ${Math.round(pct*100)}% de las ventas que incluyen ${a}.`, peso:pct});
+        paresVistos.add(a);
+      }
+    }
+  });
+
+  const porCliente = {};
+  cerrados.forEach(r=>{
+    if(!r.cliente) return;
+    (porCliente[r.cliente] = porCliente[r.cliente]||[]).push(r);
+  });
+  Object.entries(porCliente).forEach(([cliente, reportesCliente])=>{
+    if(reportesCliente.length < 3) return;
+    reportesCliente.sort((a,b)=>a.horaCierre-b.horaCierre);
+    const conteoProd = {};
+    reportesCliente.forEach(r=>{
+      const nombres = new Set(r.productos.map(p=>p.nombre));
+      nombres.forEach(n=> conteoProd[n] = (conteoProd[n]||0)+1);
+    });
+    const regulares = Object.entries(conteoProd).filter(([,c])=> c/reportesCliente.length >= 0.6).map(([n])=>n);
+    const ultimos = reportesCliente.slice(-2);
+    const nombresUltimos = new Set();
+    ultimos.forEach(r=>r.productos.forEach(p=>nombresUltimos.add(p.nombre)));
+    regulares.forEach(prod=>{
+      if(!nombresUltimos.has(prod)){
+        hallazgos.push({categoria:'CLIENTE', texto:`El cliente ${cliente} dejó de comprar ${prod}, que solía adquirir regularmente.`, peso:1});
+      }
+    });
+  });
+
+  function pctTransferencia(lista){
+    if(lista.length===0) return null;
+    const conTransf = lista.filter(r=>r.metodoPago==='transferencia' || r.metodoPago==='mixto').length;
+    return conTransf/lista.length;
+  }
+  const pctRec = pctTransferencia(recientes);
+  const pctAnt = pctTransferencia(anteriores);
+  if(pctRec!=null && pctAnt!=null && recientes.length>=5 && anteriores.length>=5){
+    const diferencia = (pctRec - pctAnt)*100;
+    if(diferencia >= 10){
+      hallazgos.push({categoria:'COBRO', texto:`El porcentaje de operaciones con transferencia subió de ${Math.round(pctAnt*100)}% a ${Math.round(pctRec*100)}% respecto al período anterior.`, peso:diferencia});
+    } else if(diferencia <= -10){
+      hallazgos.push({categoria:'COBRO', texto:`El porcentaje de operaciones con transferencia bajó de ${Math.round(pctAnt*100)}% a ${Math.round(pctRec*100)}% respecto al período anterior.`, peso:Math.abs(diferencia)});
+    }
+  }
+
+  hallazgos.sort((a,b)=> (b.peso||0) - (a.peso||0));
+  const top = hallazgos.slice(0,12);
+
+  if(top.length===0){
+    cont.innerHTML = '<div class="empty-state">No se encontraron hallazgos con suficiente evidencia por ahora.</div>';
+    return;
+  }
+
+  const coloresCategoria = {
+    'OPORTUNIDAD': 'var(--primary)',
+    'ATENCIÓN': 'var(--danger)',
+    'REPOSICIÓN': 'var(--primary)',
+    'CLIENTE': 'var(--muted-dark)',
+    'COBRO': 'var(--primary-dark)'
+  };
+
+  cont.innerHTML = top.map(h=>`
+    <div class="hallazgo-item">
+      <div class="hallazgo-categoria" style="color:${coloresCategoria[h.categoria]||'var(--text-dark)'}">${h.categoria}</div>
+      <div class="hallazgo-texto">${escapeHtml(h.texto)}</div>
+    </div>`).join('');
+}
+
 /* ======================= NAVEGACIÓN DE PESTAÑAS ======================= */
 document.querySelectorAll('nav.tabbar button').forEach(btn=>{
   btn.onclick = async ()=>{
@@ -1318,6 +1465,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn=>{
     if(n==='2') await renderListaVentas();
     if(n==='3') await renderTab3();
     if(n==='4'){ await renderCatalogo(); await renderUnidades(); }
+    if(n==='5') await renderAsesor();
   };
 });
 
