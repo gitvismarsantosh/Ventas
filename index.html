@@ -1017,26 +1017,32 @@ document.getElementById('btnImportarProductos').onclick = ()=> document.getEleme
 document.getElementById('inputImportarProductos').onchange = async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
-  const texto = await file.text();
   const unidades = await idbGetAll('unidades');
+  if(unidades.length===0){
+    toast('Primero debe definir el catálogo de Unidades de medida.', 'error');
+    e.target.value='';
+    return;
+  }
+  const texto = await file.text();
   const lineas = texto.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
-  let importados=0, omitidos=0;
+  let importados=0, omitidos=0, sinUnidad=0;
   for(const linea of lineas){
     const partes = linea.split(';').map(s=>s.trim());
-    if(partes.length<4) continue;
-    const [codigo,nombre,unidadTexto,precioStr] = partes;
+    if(partes.length<3) continue;
+    const [codigo,nombre,codigoUnidad] = partes;
     const existente = await idbGet('productos', codigo);
     if(existente){ omitidos++; continue; }
-    const u = unidades.find(u=>u.codigo===unidadTexto || u.nombre.toLowerCase()===unidadTexto.toLowerCase() || u.abreviatura.toLowerCase()===unidadTexto.toLowerCase());
-    const precio = parseFloat(precioStr);
-    const prod = { codigo, nombre, precio: isNaN(precio)? null : precio };
-    if(u) prod.unidadCodigo = u.codigo; else prod.unidadMedida = unidadTexto;
+    const u = unidades.find(u=>u.codigo===codigoUnidad);
+    const prod = { codigo, nombre, precio: null };
+    if(u){ prod.unidadCodigo = u.codigo; } else { prod.unidadMedida = codigoUnidad; sinUnidad++; }
     await idbAdd('productos', prod);
     importados++;
   }
   e.target.value='';
   renderCatalogo();
-  toast(`Importados: ${importados}. Omitidos (ya existían): ${omitidos}.`);
+  let msg = `Importados: ${importados}. Omitidos (ya existían): ${omitidos}.`;
+  if(sinUnidad>0) msg += ` ${sinUnidad} sin unidad reconocida.`;
+  toast(msg, sinUnidad>0? 'warning' : undefined);
 };
 
 document.getElementById('btnExportarProductos').onclick = async ()=>{
