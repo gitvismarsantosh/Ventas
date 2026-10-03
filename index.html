@@ -478,7 +478,7 @@ function renderizarVentaHTML(r){
   const pagoTexto = etiquetasPago[r.metodoPago] || '';
   const productosHtml = r.productos.map(p=>`
     <div class="venta-producto-line">
-      <span>${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</span>
+      <span>${p.cantidad} - ${escapeHtml(p.nombre)} (${escapeHtml(p.unidadMedida)})&nbsp;&nbsp;x&nbsp;&nbsp;${money(p.precio)}</span>
       <span>${money(p.subtotal)}</span>
     </div>`).join('');
   const detalleMixto = r.metodoPago==='mixto'

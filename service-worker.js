@@ -1,4 +1,4 @@
-const CACHE_NAME = 'compras-q-v16';
+const CACHE_NAME = 'compras-q-v17';
 const ASSETS = [
   './index.html',
   './manifest.json',
