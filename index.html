@@ -539,11 +539,21 @@ document.getElementById('btnFinVenta').onclick = async ()=>{
       toast('La suma de transferencia y efectivo no coincide con el total de la venta.', 'error');
       return;
     }
+    const numTransf = document.getElementById('inNumTransferenciaMixta').value.trim();
+    if(!numTransf){
+      toast('Debes introducir el código de la transferencia.', 'error');
+      return;
+    }
     reporteActivo.pagoTransferencia = transferencia;
     reporteActivo.pagoEfectivo = efectivo;
-    reporteActivo.numeroTransferencia = document.getElementById('inNumTransferenciaMixta').value.trim() || null;
+    reporteActivo.numeroTransferencia = numTransf;
   } else if(reporteActivo.metodoPago === 'transferencia'){
-    reporteActivo.numeroTransferencia = document.getElementById('inNumTransferenciaSimple').value.trim() || null;
+    const numTransf = document.getElementById('inNumTransferenciaSimple').value.trim();
+    if(!numTransf){
+      toast('Debes introducir el código de la transferencia.', 'error');
+      return;
+    }
+    reporteActivo.numeroTransferencia = numTransf;
   }
   if(!confirm('¿Finalizar y guardar esta venta? No podrá modificarse después.')) return;
   reporteActivo.estado='cerrado';
